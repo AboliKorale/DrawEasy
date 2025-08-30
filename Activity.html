@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Activity Diagram Builder — Full UML Symbols</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1021; --panel:rgba(255,255,255,.04); --muted:#9aa3b2; --text:#e7e9f3;
+    --radius: 14px;
+    --glass: rgba(255,255,255,.06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    height: 100vh;
+    font-family: Montserrat, system-ui, Arial, sans-serif;
+    color: var(--text);
+    background: linear-gradient(160deg, #0f1021, #1b1e3c);
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    grid-template-rows: 72px 1fr;
+    gap: 14px;
+    padding: 14px;
+  }
+  header {
+    grid-column: 1/4;
+    background: var(--panel);
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+  }
+  .title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+  }
+  .logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #7c4dff, #00e5ff);
+    display: grid;
+    place-items: center;
+  }
+  .actions {
+    display: flex;
+    gap: 10px;
+  }
+  button {
+    border: 0;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.08);
+    color: var(--text);
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #7c4dff, #00e5ff);
+    color: #001;
+  }
+
+  /* left toolbox */
+  .panel {
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    padding: 14px;
+    border: 1px solid rgba(255,255,255,.06);
+  }
+  #toolbox { padding: 14px; }
+  .tool-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .tool {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.02);
+    cursor: grab;
+    border: 1px solid rgba(255,255,255,.04);
+  }
+  .tool svg {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .tool .meta { font-size: 13px; }
+  .hint {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 12px;
+  }
+
+  /* connector tool */
+  .tool.connector-active {
+    background: rgba(124,77,255,.2);
+    border-color: rgba(124,77,255,.4);
+  }
+
+  /* workspace */
+  #workspaceWrap { position: relative; }
+  #workspace {
+    position: relative;
+    height: 100%;
+    border-radius: 12px;
+    overflow: auto;
+  }
+  #board {
+    position: absolute;
+    inset: 0;
+    background-color: #0e1030;
+    background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+    background-size: 22px 22px;
+    padding: 20px;
+  }
+
+  /* SVG overlay for connections */
+  #connections {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .connection {
+    stroke: #00e5ff;
+    stroke-width: 2;
+    fill: none;
+    filter: drop-shadow(0 2px 4px rgba(0,229,255,.2));
+  }
+  .connection-temp {
+    stroke: #7c4dff;
+    stroke-width: 2;
+    fill: none;
+    stroke-dasharray: 5,5;
+    opacity: 0.7;
+  }
+
+  /* node on canvas */
+  .node {
+    position: absolute;
+    user-select: none;
+    cursor: move;
+    transform-origin: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 10;
+  }
+  .node .svgwrap { pointer-events: none; }
+  .node .label {
+    font-size: 12px;
+    color: var(--text);
+    background: transparent;
+    padding: 2px 6px;
+    border-radius: 6px;
+    max-width: 220px;
+    text-align: center;
+  }
+  .node.selected {
+    outline: 2px solid rgba(0,229,255,.16);
+    filter: drop-shadow(0 8px 18px rgba(0,229,255,.06));
+  }
+
+  /* connection mode */
+  .node.connection-hover {
+    outline: 3px solid rgba(124,77,255,.6) !important;
+    filter: drop-shadow(0 0 10px rgba(124,77,255,.4)) !important;
+  }
+  .node.first-selected {
+    outline: 3px solid #7c4dff !important;
+    filter: drop-shadow(0 0 15px rgba(124,77,255,.6)) !important;
+  }
+
+  /* smaller types */
+  .node.small .label { font-size: 11px; }
+
+  /* swimlane special */
+  .swimlane {
+    width: 300px;
+    height: 160px;
+    border-radius: 8px;
+    border: 2px dashed rgba(255,255,255,.06);
+    background: linear-gradient(180deg, rgba(255,255,255,.02), transparent);
+  }
+  .swimlane .header {
+    width: 100%;
+    padding: 8px;
+    background: rgba(255,255,255,.03);
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 1px dashed rgba(255,255,255,.04);
+  }
+
+  /* right props */
+  #props {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  label { font-size: 13px; color: var(--muted); }
+  input, select, textarea {
+    background: var(--glass);
+    border: 1px solid rgba(255,255,255,.08);
+    padding: 10px;
+    border-radius: 8px;
+    color: var(--text);
+    outline: none;
+  }
+  textarea {
+    min-height: 80px;
+    resize: vertical;
+  }
+  .small-hint { font-size: 12px; color: var(--muted); }
+
+  /* rotate handle */
+  .rotate-handle {
+    width: 12px;
+    height: 12px;
+    background: #0ff;
+    border-radius: 50%;
+    position: absolute;
+    right: -10px;
+    top: -10px;
+    cursor: grab;
+    z-index: 100;
+    display: none;
+  }
+  .node.selected .rotate-handle {
+    display: block !important;
+  }
+
+  /* Export mode - hide all UI elements */
+  .export-mode .rotate-handle {
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+  .export-mode .node.selected,
+  .export-mode .node.first-selected,
+  .export-mode .node.connection-hover {
+    outline: none !important;
+    filter: none !important;
+  }
+  .export-mode .connection-temp {
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+
+  /* scrollbars */
+  ::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,.08);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <div class="logo"> </div>
+      <div>Activity Diagram Builder — Full UML Symbols</div>
+    </div>
+    <div class="actions">
+      <button id="btnClear" class="btn-ghost" title="Clear the board">Clear</button>
+      <button id="btnExport" class="btn-primary" title="Export PNG">Export PNG</button>
+    </div>
+  </header>
+
+  <!-- TOOLBOX -->
+  <aside id="toolbox" class="panel">
+    <div class="tool-grid">
+      <div class="tool" id="connectorTool">
+        <svg width="44" height="44" viewBox="0 0 44 44">
+          <circle cx="22" cy="22" r="20" fill="#7c4dff" opacity="0.15"/>
+          <path d="M12 22h20M32 22l-6-6M32 22l-6 6" stroke="#7c4dff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="meta">Connect Nodes</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Initial">
+        <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="16" fill="#111" /></svg>
+        <div class="meta">Initial State</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Final">
+        <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="16" fill="#fff" stroke="#111" stroke-width="4"/><circle cx="32" cy="32" r="8" fill="#111"/></svg>
+        <div class="meta">Final State</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Activity">
+        <svg viewBox="0 0 120 60"><rect x="4" y="6" width="112" height="48" rx="12" fill="#263247" stroke="#fff" stroke-opacity=".06"/></svg>
+        <div class="meta">Activity State</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Decision">
+        <svg viewBox="0 0 80 80"><g transform="translate(40,40)"><rect x="-24" y="-24" width="48" height="48" transform="rotate(45)" fill="#00b5d8" stroke="#083048" stroke-width="1"/></g></svg>
+        <div class="meta">Decision Node</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Guard">
+        <svg viewBox="0 0 80 80"><g transform="translate(40,40)"><rect x="-18" y="-18" width="36" height="36" transform="rotate(45)" fill="#fff" stroke="#000"/></g></svg>
+        <div class="meta">Guard (diamond)</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Fork">
+        <svg viewBox="0 0 120 24"><rect x="6" y="6" width="108" height="12" fill="#111"/></svg>
+        <div class="meta">Fork / Join (bar)</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Merge">
+        <svg viewBox="0 0 80 80"><g transform="translate(40,40)"><rect x="-20" y="-20" width="40" height="40" transform="rotate(45)" fill="#fff" stroke="#000"/></g></svg>
+        <div class="meta">Merge</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Time">
+        <svg viewBox="0 0 64 64"><path d="M16 10h32v4L34 32l14 18v4H16v-4L30 32 16 14z" fill="#fff" stroke="#111"/></svg>
+        <div class="meta">Time Event</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Control">
+        <svg viewBox="0 0 120 40"><line x1="6" y1="20" x2="96" y2="20" stroke="#000" stroke-width="4" stroke-linecap="round"/><polygon points="96,12 116,20 96,28" fill="#000"/></svg>
+        <div class="meta">Control Flow (arrow)</div>
+      </div>
+      <div class="tool" draggable="true" data-shape="Swimlane">
+        <svg viewBox="0 0 140 80"><rect x="2" y="2" width="136" height="76" rx="6" fill="none" stroke="#ccc" stroke-width="1"/><rect x="2" y="2" width="120" height="20" rx="4" fill="#1b2330" /></svg>
+        <div class="meta">Swimlane</div>
+      </div>
+    </div>
+    <p class="hint">Drag a symbol onto the board. Click "Connect Nodes" then click two nodes to connect them. ESC to cancel connection mode.</p>
+  </aside>
+
+  <!-- WORKSPACE -->
+  <section id="workspaceWrap" class="panel">
+    <div id="workspace">
+      <div id="board">
+        <svg id="connections" width="100%" height="100%">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#00e5ff"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROPERTIES -->
+  <aside id="props" class="panel">
+    <h3 style="margin:0">Properties</h3>
+    <div>
+      <label class="small-hint">Type</label>
+      <select id="pType">
+        <option value="">— select —</option>
+        <option value="Initial">Initial State</option>
+        <option value="Final">Final State</option>
+        <option value="Activity">Activity State</option>
+        <option value="Decision">Decision</option>
+        <option value="Guard">Guard</option>
+        <option value="Fork">Fork</option>
+        <option value="Merge">Merge</option>
+        <option value="Time">Time Event</option>
+        <option value="Control">Control Flow</option>
+        <option value="Swimlane">Swimlane</option>
+      </select>
+    </div>
+    <div>
+      <label class="small-hint">Label</label>
+      <input id="pLabel" type="text" placeholder="Label will appear on the shape" />
+    </div>
+    <div>
+      <label class="small-hint">Notes / Attributes</label>
+      <textarea id="pNotes" placeholder="Optional notes"></textarea>
+    </div>
+    <p class="small-hint">Click a placed symbol to edit its label. Use the connector tool to link nodes together.</p>
+  </aside>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>
+  const toolbox = document.getElementById('toolbox');
+  const workspace = document.getElementById('workspace');
+  const board = document.getElementById('board');
+  const connections = document.getElementById('connections');
+  const connectorTool = document.getElementById('connectorTool');
+  const pType = document.getElementById('pType');
+  const pLabel = document.getElementById('pLabel');
+  const pNotes = document.getElementById('pNotes');
+  const btnClear = document.getElementById('btnClear');
+  const btnExport = document.getElementById('btnExport');
+
+  let selected = null;
+  let connectionMode = false;
+  let firstConnectionNode = null;
+  let tempLine = null;
+  let nodeCounter = 0;
+  let connectionsList = [];
+
+  // Connector tool functionality
+  connectorTool.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    connectionMode = !connectionMode;
+    connectorTool.classList.toggle('connector-active', connectionMode);
+
+    // Clear any previous state
+    if (firstConnectionNode) {
+      firstConnectionNode.classList.remove('first-selected');
+      firstConnectionNode = null;
+    }
+    removeTempLine();
+
+    // Change cursor on board
+    board.style.cursor = connectionMode ? 'crosshair' : 'default';
+
+    console.log('Connection mode:', connectionMode);
+  });
+
+  // Drag from toolbox
+  toolbox.querySelectorAll('.tool[data-shape]').forEach(item=>{
+    item.addEventListener('dragstart', e=>{
+      e.dataTransfer.setData('shape', item.dataset.shape);
+    });
+  });
+
+  // Drop on workspace
+  workspace.addEventListener('dragover', e=>e.preventDefault());
+  workspace.addEventListener('drop', e=>{
+    e.preventDefault();
+    const shape = e.dataTransfer.getData('shape');
+    if(!shape) return;
+    const rect = board.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const node = createNode(shape, x, y);
+    board.appendChild(node);
+    selectNode(node);
+  });
+
+  // Node factory
+  function createNode(type, x = 80, y = 80) {
+    const el = document.createElement('div');
+    el.className = 'node';
+    el.dataset.type = type;
+    el.dataset.nodeId = 'node_' + (++nodeCounter);
+    el.style.left = x + 'px'; 
+    el.style.top = y + 'px';
+
+    if (type === 'Swimlane') {
+      // Swimlane special structure
+      el.classList.add('swimlane');
+      const header = document.createElement('div'); 
+      header.className = 'header'; 
+      header.textContent = 'Swimlane';
+      const content = document.createElement('div'); 
+      content.style.flex = '1'; 
+      content.style.padding = '8px';
+      el.appendChild(header); 
+      el.appendChild(content);
+      el.dataset.hasLabelInHeader = '1';
+      makeDraggable(el);
+      makeRotatable(el);
+      attachNodeEventListeners(el);
+      return el;
+    }
+
+    const svgwrap = document.createElement('div'); 
+    svgwrap.className = 'svgwrap';
+    svgwrap.innerHTML = svgFor(type);
+    const label = document.createElement('div'); 
+    label.className = 'label';
+    label.textContent = defaultLabel(type);
+
+    el.appendChild(svgwrap); 
+    el.appendChild(label);
+    if (['Initial', 'Final', 'Time', 'Control', 'Fork'].includes(type)) el.classList.add('small');
+    makeDraggable(el);
+    makeRotatable(el);
+    attachNodeEventListeners(el);
+    el._labelEl = label; 
+    el._svgWrap = svgwrap;
+    return el;
+  }
+
+  function attachNodeEventListeners(el) {
+    // Click handler for both connection and selection
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+
+      if (connectionMode) {
+        handleConnectionClick(el);
+      } else {
+        selectNode(el);
+      }
+    });
+
+    // Hover effects for connection mode
+    el.addEventListener('mouseenter', () => {
+      if (connectionMode && el !== firstConnectionNode) {
+        el.classList.add('connection-hover');
+      }
+    });
+
+    el.addEventListener('mouseleave', () => {
+      el.classList.remove('connection-hover');
+    });
+  }
+
+  function handleConnectionClick(node) {
+    if (!firstConnectionNode) {
+      // First node selection
+      firstConnectionNode = node;
+      node.classList.add('first-selected');
+      console.log('First node selected:', node.dataset.nodeId);
+    } else if (firstConnectionNode !== node) {
+      // Second node selection - create connection
+      createConnection(firstConnectionNode, node);
+      firstConnectionNode.classList.remove('first-selected');
+      firstConnectionNode = null;
+      removeTempLine();
+      console.log('Connection created to:', node.dataset.nodeId);
+    }
+    // If clicking the same node, ignore
+  }
+
+  function createConnection(fromNode, toNode) {
+    const fromCenter = getNodeCenter(fromNode);
+    const toCenter = getNodeCenter(toNode);
+
+    const connectionId = 'conn_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', fromCenter.x);
+    line.setAttribute('y1', fromCenter.y);
+    line.setAttribute('x2', toCenter.x);
+    line.setAttribute('y2', toCenter.y);
+    line.setAttribute('class', 'connection');
+    line.setAttribute('marker-end', 'url(#arrowhead)');
+    line.dataset.connectionId = connectionId;
+    line.dataset.from = fromNode.dataset.nodeId;
+    line.dataset.to = toNode.dataset.nodeId;
+
+    connections.appendChild(line);
+
+    connectionsList.push({
+      id: connectionId,
+      from: fromNode.dataset.nodeId,
+      to: toNode.dataset.nodeId,
+      element: line
+    });
+
+    console.log('Connection created:', connectionId);
+  }
+
+  function getNodeCenter(node) {
+    const rect = node.getBoundingClientRect();
+    const boardRect = board.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width/2 - boardRect.left,
+      y: rect.top + rect.height/2 - boardRect.top
+    };
+  }
+
+  function updateConnections() {
+    connectionsList.forEach(conn => {
+      const fromNode = document.querySelector(`[data-node-id="${conn.from}"]`);
+      const toNode = document.querySelector(`[data-node-id="${conn.to}"]`);
+
+      if (fromNode && toNode) {
+        const fromCenter = getNodeCenter(fromNode);
+        const toCenter = getNodeCenter(toNode);
+
+        conn.element.setAttribute('x1', fromCenter.x);
+        conn.element.setAttribute('y1', fromCenter.y);
+        conn.element.setAttribute('x2', toCenter.x);
+        conn.element.setAttribute('y2', toCenter.y);
+      }
+    });
+  }
+
+  function removeTempLine() {
+    if (tempLine) {
+      tempLine.remove();
+      tempLine = null;
+    }
+  }
+
+  // Mouse move for temporary line
+  board.addEventListener('mousemove', (e) => {
+    if (connectionMode && firstConnectionNode) {
+      const rect = board.getBoundingClientRect();
+      const fromCenter = getNodeCenter(firstConnectionNode);
+
+      if (!tempLine) {
+        tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tempLine.setAttribute('class', 'connection-temp');
+        connections.appendChild(tempLine);
+      }
+
+      tempLine.setAttribute('x1', fromCenter.x);
+      tempLine.setAttribute('y1', fromCenter.y);
+      tempLine.setAttribute('x2', e.clientX - rect.left);
+      tempLine.setAttribute('y2', e.clientY - rect.top);
+    }
+  });
+
+  function defaultLabel(type){
+    const map={'Initial':'','Final':'','Activity':'Activity','Decision':'Decision?','Guard':'[guard]','Fork':'','Merge':'','Time':'Time','Control':'','Swimlane':'Swimlane'};
+    return map[type]??type;
+  }
+
+  function svgFor(type){
+    if(type==='Initial') return '<svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="16" fill="#000"/></svg>';
+    if(type==='Final') return '<svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="16" fill="#fff" stroke="#000" stroke-width="3"/><circle cx="32" cy="32" r="7" fill="#000"/></svg>';
+    if(type==='Activity') return '<svg width="140" height="60" viewBox="0 0 140 60"><rect x="2" y="6" width="136" height="48" rx="10" fill="#2b3346" stroke="#fff" stroke-opacity=".06"/></svg>';
+    if(type==='Decision') return '<svg width="84" height="84" viewBox="0 0 84 84"><g transform="translate(42,42)"><rect x="-26" y="-26" width="52" height="52" transform="rotate(45)" fill="#0bbcd6" stroke="#073245" stroke-width="1"/></g></svg>';
+    if(type==='Guard') return '<svg width="72" height="72" viewBox="0 0 72 72"><g transform="translate(36,36)"><rect x="-18" y="-18" width="36" height="36" transform="rotate(45)" fill="#fff" stroke="#000"/></g></svg>';
+    if(type==='Fork'||type==='Join') return '<svg width="120" height="20" viewBox="0 0 120 20"><rect x="6" y="4" width="108" height="12" fill="#000"/></svg>';
+    if(type==='Merge') return '<svg width="72" height="72" viewBox="0 0 72 72"><g transform="translate(36,36)"><rect x="-18" y="-18" width="36" height="36" transform="rotate(45)" fill="#fff" stroke="#000"/></g></svg>';
+    if(type==='Time') return '<svg width="48" height="64" viewBox="0 0 48 64"><path d="M6 6h36v4L24 32 42 54v4H6v-4L24 32 6 10z" fill="#fff" stroke="#000"/></svg>';
+    if(type==='Control') return '<svg width="120" height="32" viewBox="0 0 120 32"><line x1="6" y1="16" x2="96" y2="16" stroke="#000" stroke-width="4" stroke-linecap="round"/><polygon points="96,8 116,16 96,24" fill="#000"/></svg>';
+    return '<svg width="64" height="64" viewBox="0 0 64 64"><rect x="4" y="8" width="56" height="48" rx="8" fill="#2b3346"/></svg>';
+  }
+
+  // Selection
+  function selectNode(el){
+    if(selected) selected.classList.remove('selected');
+    selected=el; if(!selected) return;
+    selected.classList.add('selected');
+
+    console.log('Node selected:', el.dataset.nodeId, 'has rotate handle:', !!el.querySelector('.rotate-handle'));
+
+    pType.value = selected.dataset.type||'';
+    if(selected.dataset.hasLabelInHeader) pLabel.value = selected.querySelector('.header').textContent;
+    else pLabel.value = selected._labelEl?.textContent||'';
+    pNotes.value = selected.dataset.notes||'';
+  }
+
+  // Property updates
+  pType.addEventListener('input', e=>{
+    if(!selected) return;
+    selected.dataset.type=e.target.value;
+    if(!selected.dataset.hasLabelInHeader){
+      selected._svgWrap.innerHTML = svgFor(e.target.value);
+      selected._labelEl.textContent = defaultLabel(e.target.value);
+    } else {
+      selected.querySelector('.header').textContent = e.target.value;
+    }
+  });
+  pLabel.addEventListener('input', e=>{
+    if(!selected) return;
+    if(selected.dataset.hasLabelInHeader) selected.querySelector('.header').textContent=e.target.value;
+    else selected._labelEl.textContent=e.target.value;
+  });
+  pNotes.addEventListener('input', e=>{
+    if(!selected) return;
+    selected.dataset.notes=e.target.value;
+  });
+
+  // Draggable
+  function makeDraggable(el){
+    let offsetX=0, offsetY=0, dragging=false;
+
+    el.addEventListener('mousedown', e=>{
+      if(e.target.classList.contains('rotate-handle')) return;
+      if (connectionMode) return; // Don't drag in connection mode
+
+      dragging=true;
+      offsetX=e.clientX-el.getBoundingClientRect().left;
+      offsetY=e.clientY-el.getBoundingClientRect().top;
+      e.preventDefault(); // Prevent text selection
+    });
+
+    document.addEventListener('mousemove', e=>{
+      if(!dragging) return;
+      const rect = board.getBoundingClientRect();
+      el.style.left = (e.clientX-rect.left-offsetX)+'px';
+      el.style.top = (e.clientY-rect.top-offsetY)+'px';
+      updateConnections();
+    });
+
+    document.addEventListener('mouseup', ()=>{
+      if (dragging) {
+        dragging = false;
+        if (!connectionMode) {
+          selectNode(el);
+        }
+      }
+    });
+  }
+
+  // Rotatable
+  function makeRotatable(node){
+    const handle = document.createElement('div');
+    handle.className='rotate-handle';
+    node.appendChild(handle);
+
+    console.log('Rotate handle created for:', node.dataset.nodeId);
+
+    let rotating=false, center={x:0,y:0};
+
+    handle.addEventListener('mousedown', e=>{
+      e.stopPropagation(); 
+      rotating=true;
+      const rect = node.getBoundingClientRect();
+      center.x = rect.left + rect.width/2;
+      center.y = rect.top + rect.height/2;
+    });
+
+    document.addEventListener('mousemove', e=>{
+      if(!rotating) return;
+      const dx = e.clientX - center.x;
+      const dy = e.clientY - center.y;
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      node.style.transform = `rotate(${angle}deg)`;
+      updateConnections();
+    });
+
+    document.addEventListener('mouseup', ()=>{
+      rotating=false;
+    });
+  }
+
+  // Clear board
+  btnClear.addEventListener('click', ()=>{
+    // Clear all nodes
+    const nodes = board.querySelectorAll('.node');
+    nodes.forEach(node => node.remove());
+
+    // Clear all connections
+    const connectionElements = connections.querySelectorAll('.connection, .connection-temp');
+    connectionElements.forEach(conn => conn.remove());
+
+    // Reset state
+    selected = null; 
+    connectionsList = [];
+    nodeCounter = 0;
+    firstConnectionNode = null;
+    removeTempLine();
+    connectionMode = false;
+    connectorTool.classList.remove('connector-active');
+    board.style.cursor = 'default';
+  });
+
+  // Export
+  btnExport.addEventListener('click', ()=>{
+    // Add export-mode class to hide UI elements
+    board.classList.add('export-mode');
+
+    // Force hide all rotate handles with inline styles as backup
+    const rotateHandles = board.querySelectorAll('.rotate-handle');
+    rotateHandles.forEach(handle => {
+      handle.style.visibility = 'hidden';
+      handle.style.opacity = '0';
+    });
+
+    // Hide temporary connection line
+    if (tempLine) {
+      tempLine.style.visibility = 'hidden';
+    }
+
+    // Wait a moment for styles to apply
+    setTimeout(() => {
+      html2canvas(board, {
+        backgroundColor: '#0e1030',
+        scale: 2,
+        useCORS: true,
+        allowTaint: true
+      }).then(canvas=>{
+        // Remove export-mode class to restore UI elements
+        board.classList.remove('export-mode');
+
+        // Restore rotate handles
+        rotateHandles.forEach(handle => {
+          handle.style.visibility = '';
+          handle.style.opacity = '';
+        });
+
+        // Restore temp line
+        if (tempLine) {
+          tempLine.style.visibility = '';
+        }
+
+        // Download the image
+        const link=document.createElement('a');
+        link.download='activity-diagram.png';
+        link.href=canvas.toDataURL('image/png');
+        link.click();
+      }).catch(error => {
+        console.error('Export failed:', error);
+        // Restore UI elements even if export fails
+        board.classList.remove('export-mode');
+        rotateHandles.forEach(handle => {
+          handle.style.visibility = '';
+          handle.style.opacity = '';
+        });
+        if (tempLine) {
+          tempLine.style.visibility = '';
+        }
+      });
+    }, 100); // Small delay to ensure styles are applied
+  });
+
+  // Escape key to exit connection mode
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && connectionMode) {
+      connectionMode = false;
+      connectorTool.classList.remove('connector-active');
+      board.style.cursor = 'default';
+
+      if (firstConnectionNode) {
+        firstConnectionNode.classList.remove('first-selected');
+        firstConnectionNode = null;
+      }
+      removeTempLine();
+    }
+  });
+  </script>
+</body>
+</html>

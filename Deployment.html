@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Deployment Diagram Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f2f6fc; --panel:#dbe5f5; --muted:#5d6d7e; --text:#1b1f3b;
+  --radius:12px; --glass:rgba(255,255,255,.4);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;height:100vh;font-family:Montserrat,system-ui,Arial,sans-serif;color:var(--text);
+  background:var(--bg);display:grid;grid-template-columns:280px 1fr 320px;grid-template-rows:72px 1fr;gap:14px;padding:14px;
+}
+header{grid-column:1/4;background:var(--panel);
+border-radius:var(--radius);display:flex;align-items:center;
+justify-content:space-between;padding:14px 18px}
+.title{display:flex;align-items:center;gap:12px;font-weight:700}
+.logo{width:44px;height:44px;border-radius:10px;background:#1b1f3b;color:#fff;display:grid;place-items:center}
+.actions{display:flex;gap:10px}
+button{border:0;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer}
+.btn-ghost{background:transparent;border:1px solid rgba(27,31,59,.2);color:var(--text)}
+.btn-primary{background:#1b1f3b;color:#fff}
+
+.panel{background:var(--panel);border-radius:var(--radius);padding:14px;border:1px solid rgba(27,31,59,.2)}
+#toolbox{padding:14px}
+.tool-grid{display:grid;gap:10px}
+.tool{display:flex;gap:10px;align-items:center;padding:10px;border-radius:10px;background:rgba(255,255,255,.3);cursor:pointer;border:1px solid rgba(27,31,59,.1);user-select:none}
+.tool svg{width:44px;height:44px;flex-shrink:0}
+.tool .meta{font-size:13px}
+.hint{color:var(--muted);font-size:12px;margin-top:12px}
+
+#workspaceWrap{position:relative}
+#workspace{position:relative;height:100%;border-radius:12px;overflow:auto}
+#board{position:absolute;inset:0;background-color:#e9f1fb;background-image:radial-gradient(rgba(0,0,0,.05) 1px,transparent 1px);background-size:22px 22px;padding:20px}
+
+.node{position:absolute;background:#fff;border:1px solid #1b1f3b;border-radius:6px;padding:10px;cursor:move;font-size:13px;font-weight:600;text-align:center;min-width:80px}
+.node.selected{outline:2px solid #7c4dff;filter:drop-shadow(0 8px 18px rgba(124,77,255,.2))}
+.artifact{border:1px solid #1b1f3b;background:#fff;padding:8px;border-radius:4px;position:absolute;cursor:move;font-size:12px}
+.artifact::before{content:"📄 ";}
+
+label{font-size:13px;color:var(--muted)}
+input,textarea{background:var(--glass);border:1px solid rgba(27,31,59,.2);padding:8px;border-radius:8px;color:var(--text);outline:none}
+textarea{min-height:60px;resize:vertical}
+.small-hint{font-size:12px;color:var(--muted)}
+
+::-webkit-scrollbar{height:10px;width:10px}
+::-webkit-scrollbar-thumb{background:rgba(27,31,59,.2);border-radius:999px}
+::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<header class="panel">
+  <div class="title"><div class="logo">DEP</div>Deployment Diagram Builder</div>
+  <div class="actions">
+    <button id="btnClear" class="btn-ghost">Clear</button>
+    <button id="btnExport" class="btn-primary">Download PNG</button>
+    <button id="btnDelete" class="btn-ghost">Delete Selected</button>
+  </div>
+</header>
+
+<aside id="toolbox" class="panel">
+  <h3 style="margin:0 0 10px 0">Symbols</h3>
+  <div class="tool-grid">
+    <div class="tool" data-shape="Node">
+      <svg viewBox="0 0 64 64"><rect x="8" y="12" width="48" height="40" fill="none" stroke="#1b1f3b" stroke-width="2"/></svg>
+      <div class="meta">Node</div>
+    </div>
+    <div class="tool" data-shape="Device">
+      <svg viewBox="0 0 64 64"><rect x="8" y="8" width="48" height="28" fill="none" stroke="#1b1f3b" stroke-width="2"/><rect x="8" y="38" width="48" height="10" fill="none" stroke="#1b1f3b" stroke-width="2"/></svg>
+      <div class="meta">Device</div>
+    </div>
+    <div class="tool" data-shape="ExecutionEnvironment">
+      <svg viewBox="0 0 64 64"><ellipse cx="32" cy="32" rx="20" ry="12" fill="none" stroke="#1b1f3b" stroke-width="2"/></svg>
+      <div class="meta">Execution Environment</div>
+    </div>
+    <div class="tool" data-shape="Artifact">
+      <svg viewBox="0 0 64 64"><rect x="12" y="12" width="40" height="40" fill="none" stroke="#1b1f3b" stroke-width="2"/><line x1="12" y1="24" x2="52" y2="24" stroke="#1b1f3b" stroke-width="2"/></svg>
+      <div class="meta">Artifact</div>
+    </div>
+    <div class="tool" data-shape="CommPath">
+      <svg viewBox="0 0 100 30"><line x1="8" y1="15" x2="92" y2="15" stroke="#1b1f3b" stroke-width="2"/></svg>
+      <div class="meta">Communication Path</div>
+    </div>
+  </div>
+  <p class="hint">Click a symbol to add it. For Communication Path: click first node, then second node.</p>
+</aside>
+
+<section id="workspaceWrap" class="panel">
+  <div id="workspace"><div id="board"></div></div>
+</section>
+
+<aside id="props" class="panel">
+  <h3 style="margin:0">Properties</h3>
+  <div>
+    <label>Label</label>
+    <input id="pLabel" type="text" placeholder="Name">
+  </div>
+  <div>
+    <label>Notes</label>
+    <textarea id="pNotes" placeholder="Optional notes"></textarea>
+  </div>
+  <div>
+    <label>Type</label>
+    <input id="pType" type="text" readonly>
+  </div>
+  <p class="small-hint">Select an item to edit its label.</p>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+const board = document.getElementById('board');
+const toolbox = document.getElementById('toolbox');
+const pLabel = document.getElementById('pLabel');
+const pNotes = document.getElementById('pNotes');
+const pType = document.getElementById('pType');
+const btnClear = document.getElementById('btnClear');
+const btnExport = document.getElementById('btnExport');
+const btnDelete = document.getElementById('btnDelete');
+
+let selected = null;
+let connectors = [];
+let connectorMode = null;
+let firstNode = null;
+
+toolbox.querySelectorAll('.tool').forEach(item=>{
+  const shape = item.dataset.shape;
+  item.addEventListener('click', ()=>{
+    if(shape==='CommPath'){
+      connectorMode = shape;
+      firstNode = null;
+      alert('Click two nodes to connect.');
+    } else {
+      const node = createNode(shape, 100, 100);
+      board.appendChild(node);
+      selectNode(node);
+    }
+  });
+});
+
+function createNode(type,x=80,y=80){
+  let el;
+  if(type==='Artifact'){
+    el = document.createElement('div');
+    el.className = 'artifact';
+    el.textContent = 'Artifact';
+  } else {
+    el = document.createElement('div');
+    el.className = 'node';
+    el.textContent = type;
+  }
+  el.dataset.type = type;
+  el.style.left = x+'px';
+  el.style.top = y+'px';
+  makeDraggable(el);
+  el.addEventListener('mousedown', ()=>selectNode(el));
+  return el;
+}
+
+function selectNode(el){
+  if(selected) selected.classList.remove('selected');
+  selected = el;
+  if(!selected){ pLabel.value=''; pNotes.value=''; pType.value=''; return; }
+  selected.classList.add('selected');
+  pType.value = selected.dataset.type;
+  pLabel.value = selected.textContent;
+  pNotes.value = selected.dataset.notes || '';
+}
+
+pLabel.addEventListener('input', ()=>{
+  if(selected) selected.textContent = pLabel.value;
+});
+pNotes.addEventListener('input', ()=>{
+  if(selected) selected.dataset.notes = pNotes.value;
+});
+
+function makeDraggable(el){
+  let startX=0,startY=0,offX=0,offY=0,moving=false;
+  el.addEventListener('mousedown', (e)=>{
+    moving=true;
+    const r=el.getBoundingClientRect();
+    const b=board.getBoundingClientRect();
+    startX=e.clientX; startY=e.clientY;
+    offX=startX-r.left; offY=startY-r.top;
+    function onMove(ev){
+      if(!moving) return;
+      el.style.left = ev.clientX - b.left - offX+'px';
+      el.style.top  = ev.clientY - b.top - offY+'px';
+      updateAllConnectors();
+    }
+    function onUp(){ moving=false; document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp);}
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp,{once:true});
+  });
+}
+
+function centerOf(el){
+  const r=el.getBoundingClientRect();
+  const b=board.getBoundingClientRect();
+  return {x:r.left-b.left+r.width/2,y:r.top-b.top+r.height/2};
+}
+
+const NS="http://www.w3.org/2000/svg";
+function createSvgOverlay(){
+  let svg=board.querySelector('svg.__overlay');
+  if(!svg){
+    svg=document.createElementNS(NS,"svg");
+    svg.classList.add('__overlay');
+    svg.setAttribute('style','position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;');
+    board.appendChild(svg);
+  }
+  return svg;
+}
+
+function addCommPath(n1,n2){
+  const svg=createSvgOverlay();
+  const line=document.createElementNS(NS,'line');
+  line.setAttribute('stroke','#1b1f3b');
+  line.setAttribute('stroke-width','2');
+  svg.appendChild(line);
+  const conn={kind:'comm',n1,n2,line};
+  connectors.push(conn);
+  updateConnector(conn);
+}
+
+function updateConnector(conn){
+  if(conn.kind==='comm'){
+    const a=centerOf(conn.n1), b=centerOf(conn.n2);
+    conn.line.setAttribute('x1',a.x);
+    conn.line.setAttribute('y1',a.y);
+    conn.line.setAttribute('x2',b.x);
+    conn.line.setAttribute('y2',b.y);
+  }
+}
+function updateAllConnectors(){ connectors.forEach(updateConnector); }
+
+board.addEventListener('mousedown',(e)=>{
+  if(!connectorMode) return;
+  const node=e.target.closest('.node,.artifact');
+  if(!node) return;
+  if(!firstNode){ firstNode=node; return; }
+  if(node!==firstNode){
+    addCommPath(firstNode,node);
+    firstNode=null; connectorMode=null;
+  }
+});
+
+btnClear.addEventListener('click',()=>{
+  board.innerHTML=''; connectors=[]; selected=null;
+  pLabel.value=''; pNotes.value=''; pType.value='';
+});
+btnExport.addEventListener('click',()=>{
+  html2canvas(board,{backgroundColor:null,scale:2}).then(canvas=>{
+    const link=document.createElement('a');
+    link.download='deployment-diagram.png';
+    link.href=canvas.toDataURL('image/png');
+    link.click();
+  });
+});
+btnDelete.addEventListener('click',()=>{
+  if(!selected) return;
+  connectors = connectors.filter(conn=>{
+    if(conn.n1===selected || conn.n2===selected){
+      conn.line?.remove();
+      return false;
+    }
+    return true;
+  });
+  selected.remove();
+  selected=null; pLabel.value=''; pNotes.value=''; pType.value='';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRAWEASY</title>
+<style>
+    body { margin:0; font-family:Arial, sans-serif; 
+        background:#f5f7fa;
+     }
+    .menu-bar { display:flex; align-items:center;
+         background:#a7cbf0; padding:10px 20px; 
+         box-shadow:0 2px 5px rgba(0,0,0,0.1);
+         }
+    .logo strong { font-size:20px;
+         color:hsla(330, 66%, 58%, 0.85); 
+        }
+    .logo img 
+    { height:50px; 
+        width:50px; 
+        margin-right:8px;
+        border-radius:8px; 
+    }
+    .menu-items
+     { display:flex; 
+        margin-left:30px;
+     }
+    .menu-items div
+     { margin-right:20px; 
+        cursor:pointer;
+     }
+    .toolbar 
+    { 
+         display:flex;
+         background:#ecf0f1; 
+         padding:8px 15px; border-bottom:1px solid #ccc; 
+        }
+    .toolbar button 
+    {
+         background:white; 
+         border:1px solid #ccc; 
+         padding:6px 12px; 
+         margin-right:8px; 
+         border-radius:5px; 
+         cursor:pointer; 
+        }
+    .toolbar button:hover 
+    { 
+         background:#9ccbeb;
+         color:white; 
+        }
+    .container
+     { 
+        display:flex; 
+        height:calc(100vh - 50px);
+     }
+    .sidebar 
+    { 
+         width:220px;
+         background:#72aee9;
+         color:white; 
+         padding:15px 0; }
+    .sidebar button 
+    {
+         display:block; 
+         width:90%; 
+         background:none;
+         color:white; 
+         border:none;
+          padding:10px;
+          margin:5px auto;
+         text-align:left;
+         cursor:pointer;
+         border-radius:5px;
+         }
+    .sidebar button:hover 
+    {
+         background:#1abc9c; 
+        }
+    .main-area 
+    { 
+        flex:1;
+         background:white;
+          display:flex; 
+          justify-content:center; 
+          align-items:center; color:#888; font-size:18px; padding:20px; }
+    /* Modal */
+    .modal { 
+         display:none; 
+         position:fixed;
+         z-index:999;
+         left:0; top:0;
+         width:100%; 
+        height:100%;
+         background:rgba(0,0,0,0.6); justify-content:center; 
+         align-items:center; }
+    .modal-content { background:white; 
+        border-radius:25px; width:80%; 
+        height:80%;
+         box-shadow:0 4px 12px rgba(0,0,0,0.2);
+         overflow:hidden; }
+    .modal iframe 
+    { width:100%; 
+    height:100%;
+     border:none; }
+</style>
+</head>
+<body>
+
+<!-- Menu -->
+<div class="menu-bar">
+    <div class="logo">
+        <img src="logo.jpg" alt="Logo"><strong>DRAWEASY</strong>
+    </div>
+    <div class="menu-items">
+        <div>File</div>
+        <div>Home</div>
+        <div>Begin</div>
+        <div>View</div>
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+    <button>New</button>
+    <button>Open</button>
+    <button>Save As</button>
+    <button>Print</button>
+</div>
+
+<!-- Layout -->
+<div class="container">
+    <div class="sidebar">
+            <button><a href="class.html" style="color:white;text-decoration:none;">Class Diagram</a></button>
+            <button><a href="use_case.html" style="color:white;text-decoration:none;">Use case Diagram</a></button>
+            <button><a href="sequence.html" style="color:white;text-decoration:none;">Sequence Diagram</a></button>
+            <button><a href="Activity.html" style="color:white;text-decoration:none;">Activity Diagram</a></button>
+            <button><a href="Deployment.html" style="color:white;text-decoration:none;">Deployment Diagram</a></button>
+            <button><a href="Data_flow.html" style="color:white;text-decoration:none;">Data Flow Diagram</a></button>
+            <hr>
+        <button id="openAIBot">🤖 AI BOT</button>
+    </div>
+
+    <div class="main-area" id="mainArea">
+        Canvas Area (Draw Here)
+    </div>
+</div>
+
+<!-- AI BOT Modal -->
+<div class="modal" id="aiModal">
+    <div class="modal-content">
+        <iframe src="JAVATOUML.html"></iframe>
+    </div>
+</div>
+
+<script>
+    const aiModal = document.getElementById('aiModal');
+    const mainArea = document.getElementById('mainArea');
+
+    // Open BOT
+    document.getElementById('openAIBot').onclick = () => aiModal.style.display = 'flex';
+
+    // Close BOT when clicking outside iframe
+    window.onclick = (e) => {
+        if (e.target === aiModal) aiModal.style.display = 'none';
+    };
+
+    // Receive UML from bot
+    window.addEventListener('message', (event) => {
+        if (event.data.type === 'umlData') {
+            mainArea.innerText = event.data.payload;
+            aiModal.style.display = 'none';
+        }
+    });
+</script>
+
+</body>
+</html>

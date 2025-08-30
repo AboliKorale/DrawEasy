@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Library Management Use Case Diagram</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #0d1117;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  canvas {
+    background: radial-gradient(circle at center, #111827, #0d1117);
+    border-radius: 16px;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.5);
+    display: block;
+  }
+</style>
+</head>
+<body>
+<canvas id="umlCanvas"></canvas>
+<script>
+const canvas = document.getElementById("umlCanvas");
+const ctx = canvas.getContext("2d");
+
+let w, h;
+let targets = {};
+
+function resize() {
+  w = canvas.width = window.innerWidth * 0.8;
+  h = canvas.height = window.innerHeight * 0.8;
+
+  // Update target positions dynamically
+  targets = {
+    librarian: { x: w*0.2, y: h*0.4 },
+    member:    { x: w*0.8, y: h*0.4 },
+    addBook:   { x: w*0.5, y: h*0.25 },
+    issueBook: { x: w*0.5, y: h*0.4 },
+    returnBook:{ x: w*0.5, y: h*0.55 },
+    searchBook:{ x: w*0.5, y: h*0.7 },
+    manageMembers: { x: w*0.5, y: h*0.85 }
+  };
+}
+window.addEventListener("resize", resize);
+resize();
+
+// Shape helpers
+function drawActor(x, y, size) {
+  ctx.beginPath();
+  ctx.arc(x, y - size / 2, size / 4, 0, Math.PI * 2); // head
+  ctx.moveTo(x, y - size / 4);
+  ctx.lineTo(x, y + size / 4); // body
+  ctx.moveTo(x - size / 3, y);
+  ctx.lineTo(x + size / 3, y); // arms
+  ctx.moveTo(x, y + size / 4);
+  ctx.lineTo(x - size / 3, y + size / 2); // left leg
+  ctx.moveTo(x, y + size / 4);
+  ctx.lineTo(x + size / 3, y + size / 2); // right leg
+  ctx.stroke();
+}
+
+function drawUseCase(x, y, width, height) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, width/2, height/2, 0, 0, Math.PI*2);
+  ctx.stroke();
+}
+
+function drawLabel(text, x, y, opacity=1) {
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.font = "16px Arial";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function randomPos() {
+  return { x: Math.random() * w, y: Math.random() * h };
+}
+
+const connections = {
+  librarian: ["addBook", "issueBook", "returnBook", "manageMembers"],
+  member: ["searchBook", "issueBook", "returnBook"]
+};
+
+const shapes = [
+  { type: "actor", label: "Librarian", ...randomPos(), size: 40, target: "librarian" },
+  { type: "actor", label: "Member", ...randomPos(), size: 40, target: "member" },
+  { type: "usecase", label: "Add Book", ...randomPos(), size: 100, target: "addBook" },
+  { type: "usecase", label: "Issue Book", ...randomPos(), size: 100, target: "issueBook" },
+  { type: "usecase", label: "Return Book", ...randomPos(), size: 100, target: "returnBook" },
+  { type: "usecase", label: "Search Book", ...randomPos(), size: 100, target: "searchBook" },
+  { type: "usecase", label: "Manage Members", ...randomPos(), size: 130, target: "manageMembers" }
+];
+
+shapes.forEach(s => {
+  s.vx = (Math.random()-0.5)*0.5;
+  s.vy = (Math.random()-0.5)*0.5;
+});
+
+let startTime = null;
+function animate(ts) {
+  if (!startTime) startTime = ts;
+  const elapsed = (ts - startTime) / 1000;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
+  ctx.shadowColor = "white";
+  ctx.shadowBlur = 8;
+
+  const movePhase = elapsed > 5;
+  const labelPhase = elapsed > 7;
+
+  shapes.forEach(s => {
+    if (!movePhase) {
+      s.x += s.vx;
+      s.y += s.vy;
+      if (s.x < 20 || s.x > w-20) s.vx *= -1;
+      if (s.y < 20 || s.y > h-20) s.vy *= -1;
+    } else {
+      const tx = targets[s.target].x;
+      const ty = targets[s.target].y;
+      s.x += (tx - s.x) * 0.05;
+      s.y += (ty - s.y) * 0.05;
+    }
+  });
+
+  if (labelPhase) {
+    ctx.shadowBlur = 0;
+    for (const actorKey in connections) {
+      const actorShape = shapes.find(s => s.target === actorKey);
+      connections[actorKey].forEach(uc => {
+        const ucShape = shapes.find(s => s.target === uc);
+        ctx.beginPath();
+        ctx.moveTo(actorShape.x, actorShape.y);
+        ctx.lineTo(ucShape.x, ucShape.y);
+        ctx.stroke();
+      });
+    }
+  }
+
+  shapes.forEach(s => {
+    ctx.shadowBlur = 8;
+    if (s.type === "actor") {
+      drawActor(s.x, s.y, s.size);
+    } else {
+      drawUseCase(s.x, s.y, s.size, s.size*0.6);
+    }
+    if (labelPhase) {
+      drawLabel(s.label, s.x, s.y + (s.type==="actor" ? s.size/1.5 : 0), Math.min((elapsed-7)/1, 1));
+    }
+  });
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>

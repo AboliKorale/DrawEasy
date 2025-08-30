@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Use Case Diagram Builder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #e6f0fa;
+    --panel: #d2e0f7;
+    --muted: #5d6d7e;
+    --text: #1b1f3b;
+    --radius: 12px;
+    --glass: rgba(255,255,255,.4);
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    height: 100vh;
+    font-family: Montserrat, system-ui, Arial, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    grid-template-rows: 72px 1fr;
+    gap: 14px;
+    padding: 14px;
+}
+header {
+    grid-column: 1/4;
+    background: var(--panel);
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    font-weight: 700;
+}
+.title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg,#7c4dff,#00e5ff);
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 700;
+}
+.actions { display: flex; gap: 10px; }
+button {
+    border: 0;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.btn-ghost {
+    background: transparent;
+    border: 1px solid rgba(27,31,59,.2);
+    color: var(--text);
+}
+.btn-primary {
+    background: linear-gradient(135deg,#7c4dff,#00e5ff);
+    color: #fff;
+}
+.panel {
+    background: var(--panel);
+    backdrop-filter: blur(4px);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid rgba(27,31,59,.2);
+}
+
+/* Toolbox */
+#toolbox .tool-grid { display: grid; gap: 10px; }
+#toolbox .tool {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.3);
+    cursor: pointer;
+    border: 1px solid rgba(27,31,59,.1);
+    font-size: 14px;
+    font-weight: 600;
+}
+#toolbox .tool:hover { background: rgba(255,255,255,.5); }
+.hint { color: var(--muted); font-size: 12px; margin-top: 12px; }
+
+/* Workspace */
+#workspaceWrap { position: relative; }
+#workspace {
+    position: relative; height: 100%;
+    border-radius: var(--radius); overflow: hidden;
+}
+#board {
+    position: absolute; inset: 0;
+    background-color: #c9def8;
+    background-image: radial-gradient(rgba(0,0,0,.05) 1px,transparent 1px);
+    background-size: 22px 22px;
+}
+#connectorLayer { position:absolute; inset:0; pointer-events:none; }
+
+/* Nodes */
+.node { position: absolute; user-select: none; cursor: move; }
+.node.selected {
+    outline: 2px solid #7c4dff;
+    filter: drop-shadow(0 8px 18px rgba(124,77,255,.2));
+}
+.actor { text-align:center; width:60px; }
+.actor .name {
+    margin-top: 6px; font-weight: 600; font-size: 13px; color: var(--text);
+}
+.usecase {
+    padding: 20px 40px;
+    background: #f0f5ff;
+    border: 2px solid #7c4dff;
+    border-radius: 999px;
+    text-align: center;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* Properties */
+#properties {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+#properties label { font-size: 13px; color: var(--muted); font-weight: 600; }
+#properties input,
+#properties textarea {
+    background: var(--glass);
+    border: 1px solid rgba(27,31,59,.2);
+    padding: 8px;
+    border-radius: 8px;
+    color: var(--text);
+    outline: none;
+}
+#pColor { width: 40px; height: 40px; padding: 0; border-radius: 50%; }
+textarea { min-height: 60px; resize: vertical; }
+.small-hint { font-size: 12px; color: var(--muted); }
+
+/* Connector labels */
+.edge-label {
+    font-size: 12px;
+    fill: var(--text);
+    paint-order: stroke;
+    stroke: #fff;
+    stroke-width: 4;
+    stroke-linejoin: round;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { height: 10px; width: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(27,31,59,.2); border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">UCD</div>
+    Use Case Diagram Builder
+  </div>
+
+  <div class="actions">
+    <button id="btnClear" class="btn-ghost">Clear</button>
+    <button id="btnExport" class="btn-primary">Export PNG</button>
+    <button id="btnDelete" class="btn-ghost">Delete Selected</button>
+  </div>
+</header>
+
+<aside id="toolbox" class="panel">
+  <div class="tool-grid">
+    <div class="tool" id="addActor"><span>👤 Actor</span></div>
+    <div class="tool" id="addUseCase"><span>⬭ Use Case</span></div>
+    <div class="tool" id="connectAssociation"><span>— Association</span></div>
+    <div class="tool" id="connectInclude"><span>⇢ Include</span></div>
+    <div class="tool" id="connectExtend"><span>⇢ Extend</span></div>
+  </div>
+  <p class="hint">Tip: Click a connector tool, then click first node and second node. Drag nodes—lines follow and only touch boundaries.</p>
+</aside>
+
+<main id="workspaceWrap" class="panel">
+  <div id="workspace">
+    <svg id="connectorLayer">
+      <defs>
+        <!-- open triangle marker for include/extend -->
+        <marker id="openArrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10" fill="none" stroke="#0f172a" stroke-width="2"/>
+        </marker>
+      </defs>
+    </svg>
+    <div id="board"></div>
+  </div>
+</main>
+
+<aside id="properties" class="panel">
+  <div>
+    <label>Name</label>
+    <input id="pName" type="text" placeholder="Node name">
+  </div>
+  <div>
+    <label>Notes</label>
+    <textarea id="pNotes" rows="3" placeholder="Notes (for use case only)"></textarea>
+  </div>
+  <div>
+    <label>Use Case Fill</label>
+    <input id="pColor" type="color" value="#eff6ff">
+  </div>
+  <p class="hint">Select a node to edit. Delete removes the node and its connectors.</p>
+</aside>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+/* ---------- State ---------- */
+const board = document.getElementById('board');
+const svg = document.getElementById('connectorLayer');
+const btnClear = document.getElementById('btnClear');
+const btnExport = document.getElementById('btnExport');
+const btnDelete = document.getElementById('btnDelete');
+const pName = document.getElementById('pName');
+const pNotes = document.getElementById('pNotes');
+const pColor = document.getElementById('pColor');
+
+let selected = null;
+let connectMode = null; // 'Association' | 'Include' | 'Extend'
+let firstNode = null;
+let connectors = []; // {type, from, to, line, label}
+
+/* ---------- Utils ---------- */
+const uid = () => 'n' + Math.random().toString(36).slice(2,9);
+
+function boardRect() { return board.getBoundingClientRect(); }
+function toBoardXY(px, py) {
+  const r = boardRect();
+  return { x: px - r.left, y: py - r.top };
+}
+function centerOf(el) {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width/2, y: r.top + r.height/2, w:r.width, h:r.height };
+}
+
+/* Intersections so lines only touch boundaries */
+function boundaryPoint(el, towardEl) {
+  const a = centerOf(el);
+  const b = centerOf(towardEl);
+  const dx = b.x - a.x, dy = b.y - a.y;
+
+  // avoid zero-length
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+
+  if (el.classList.contains('usecase')) {
+    // ellipse intersection from center in direction (dx,dy)
+    const rx = a.w / 2, ry = a.h / 2;
+    // param t for p = a + t * d  such that (t*dx/rx)^2 + (t*dy/ry)^2 = 1
+    const t = 1 / Math.sqrt((dx*dx)/(rx*rx) + (dy*dy)/(ry*ry));
+    return { x: a.x + dx * t, y: a.y + dy * t };
+  } else {
+    // actor -> approximate by rectangle around the element
+    const hw = a.w / 2, hh = a.h / 2;
+    // scale to nearest side
+    const sx = hw / Math.abs(dx || 1e-6);
+    const sy = hh / Math.abs(dy || 1e-6);
+    const t = Math.min(sx, sy);
+    return { x: a.x + dx * t, y: a.y + dy * t };
+  }
+}
+
+/* ---------- Node creation ---------- */
+function createActor(x=80, y=80) {
+  const el = document.createElement('div');
+  el.className = 'node actor';
+  el.dataset.id = uid();
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.innerHTML = `
+    <svg width="60" height="80">
+      <circle cx="30" cy="12" r="8" stroke="#0f172a" fill="none"/>
+      <line x1="30" y1="20" x2="30" y2="48" stroke="#0f172a"/>
+      <line x1="30" y1="30" x2="12" y2="38" stroke="#0f172a"/>
+      <line x1="30" y1="30" x2="48" y2="38" stroke="#0f172a"/>
+      <line x1="30" y1="48" x2="16" y2="72" stroke="#0f172a"/>
+      <line x1="30" y1="48" x2="44" y2="72" stroke="#0f172a"/>
+    </svg>
+    <div class="name">Actor</div>`;
+  attachNodeBehaviors(el, true);
+  return el;
+}
+
+function createUseCase(x=200, y=160) {
+  const el = document.createElement('div');
+  el.className = 'node usecase';
+  el.dataset.id = uid();
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.textContent = 'Use Case';
+  attachNodeBehaviors(el, false);
+  return el;
+}
+
+/* ---------- Selection & Drag ---------- */
+function attachNodeBehaviors(el, isActor){
+  el.addEventListener('pointerdown', onPointerDown);
+  el.addEventListener('mousedown', (e)=> e.stopPropagation());
+  el.addEventListener('click', () => selectNode(el));
+
+  function onPointerDown(e){
+    if (connectMode) {
+      if (!firstNode) { firstNode = el; selectNode(el); }
+      else if (firstNode !== el) {
+        drawConnector(firstNode, el, connectMode);
+        firstNode = null; connectMode = null;
+      }
+      return;
+    }
+    selectNode(el);
+    const startX = e.clientX, startY = e.clientY;
+    const r = el.getBoundingClientRect(), br = boardRect();
+    const offsetX = startX - r.left, offsetY = startY - r.top;
+
+    function onMove(ev){
+      const nx = ev.clientX - br.left - offsetX;
+      const ny = ev.clientY - br.top  - offsetY;
+      // clamp inside board
+      const x = Math.max(0, Math.min(nx, br.width - el.offsetWidth));
+      const y = Math.max(0, Math.min(ny, br.height - el.offsetHeight));
+      el.style.left = x + 'px';
+      el.style.top  = y + 'px';
+      updateConnected(el);
+    }
+    function onUp(){
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+}
+
+function selectNode(el){
+  if (selected) selected.classList.remove('selected');
+  selected = el;
+  if (!selected) return;
+  selected.classList.add('selected');
+  // Properties
+  if (selected.classList.contains('usecase')) {
+    pName.value = selected.textContent;
+    pColor.value = rgbToHex(getComputedStyle(selected).backgroundColor);
+  } else {
+    pName.value = selected.querySelector('.name').textContent;
+  }
+  pNotes.value = selected.dataset.notes || '';
+}
+
+/* ---------- Properties bindings ---------- */
+pName.addEventListener('input', ()=>{
+  if (!selected) return;
+  if (selected.classList.contains('usecase')) selected.textContent = pName.value || 'Use Case';
+  else selected.querySelector('.name').textContent = pName.value || 'Actor';
+  updateConnected(selected);
+});
+pNotes.addEventListener('input', ()=>{
+  if (selected) selected.dataset.notes = pNotes.value;
+});
+pColor.addEventListener('input', ()=>{
+  if (selected && selected.classList.contains('usecase')) {
+    selected.style.backgroundColor = pColor.value;
+  }
+});
+
+/* ---------- Connectors ---------- */
+function drawConnector(fromEl, toEl, type){
+  // Create elements
+  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('stroke', '#0f172a');
+  line.setAttribute('stroke-width', '2');
+  if (type === 'Include' || type === 'Extend') {
+    line.setAttribute('stroke-dasharray','6 4');
+    line.setAttribute('marker-end','url(#openArrow)');
+  }
+
+  const label = (type === 'Include' || type === 'Extend')
+    ? document.createElementNS('http://www.w3.org/2000/svg','text')
+    : null;
+
+  if (label){
+    label.setAttribute('class','edge-label');
+    label.setAttribute('text-anchor','middle');
+    label.textContent = type === 'Include' ? '<<include>>' : '<<extend>>';
+  }
+
+  svg.appendChild(line);
+  if (label) svg.appendChild(label);
+
+  const conn = { type, from: fromEl, to: toEl, line, label };
+  connectors.push(conn);
+  updateConnector(conn);
+}
+
+function updateConnector(conn){
+  const a = boundaryPoint(conn.from, conn.to);
+  const b = boundaryPoint(conn.to, conn.from);
+  const p1 = toBoardXY(a.x, a.y);
+  const p2 = toBoardXY(b.x, b.y);
+
+  conn.line.setAttribute('x1', p1.x);
+  conn.line.setAttribute('y1', p1.y);
+  conn.line.setAttribute('x2', p2.x);
+  conn.line.setAttribute('y2', p2.y);
+
+  if (conn.label){
+    // offset label perpendicular to the line
+    const mx = (p1.x + p2.x)/2, my = (p1.y + p2.y)/2;
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ox = (-dy/len) * 16; // 16px offset
+    const oy = ( dx/len) * 16;
+    conn.label.setAttribute('x', mx + ox);
+    conn.label.setAttribute('y', my + oy);
+  }
+}
+
+function updateConnected(el){
+  connectors.forEach(c=>{
+    if (c.from === el || c.to === el) updateConnector(c);
+  });
+}
+
+window.addEventListener('resize', ()=> connectors.forEach(updateConnector));
+
+/* ---------- Toolbox ---------- */
+document.getElementById('addActor').onclick = ()=> board.appendChild(createActor(60 + Math.random()*40, 80 + Math.random()*60));
+document.getElementById('addUseCase').onclick = ()=> board.appendChild(createUseCase(200 + Math.random()*60, 180 + Math.random()*60));
+document.getElementById('connectAssociation').onclick = ()=>{ connectMode='Association'; firstNode=null; };
+document.getElementById('connectInclude').onclick = ()=>{ connectMode='Include'; firstNode=null; };
+document.getElementById('connectExtend').onclick = ()=>{ connectMode='Extend'; firstNode=null; };
+
+/* ---------- Clear / Delete / Export ---------- */
+btnClear.addEventListener('click', ()=>{
+  board.innerHTML = '';
+  // Remove all SVG children except <defs>
+  [...svg.children].forEach(ch => ch.tagName.toLowerCase()==='defs' ? null : ch.remove());
+  connectors = [];
+  selected = null;
+  pName.value = ''; pNotes.value=''; // keep color picker
+});
+
+btnDelete.addEventListener('click', ()=>{
+  if (!selected) return;
+  // remove any connectors touching selected
+  connectors = connectors.filter(c=>{
+    const hit = (c.from===selected || c.to===selected);
+    if (hit){
+      c.line.remove();
+      c.label?.remove();
+    }
+    return !hit;
+  });
+  selected.remove();
+  selected = null;
+  pName.value=''; pNotes.value='';
+});
+
+btnExport.addEventListener('click', ()=>{
+  // Wrap board + svg into a single container snapshot
+  const snapshot = document.createElement('div');
+  snapshot.style.position = 'relative';
+  snapshot.style.width = board.clientWidth + 'px';
+  snapshot.style.height = board.clientHeight + 'px';
+  const boardClone = board.cloneNode(true);
+  const svgClone = svg.cloneNode(true);
+  svgClone.style.position='absolute'; svgClone.style.inset='0';
+  snapshot.appendChild(boardClone);
+  snapshot.appendChild(svgClone);
+  document.body.appendChild(snapshot);
+  html2canvas(snapshot,{backgroundColor:null,scale:2}).then(canvas=>{
+    const a=document.createElement('a');
+    a.download='usecase-diagram.png';
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+    snapshot.remove();
+  });
+});
+
+/* ---------- Deselect on empty area click ---------- */
+board.addEventListener('mousedown', (e)=>{
+  if (e.target === board || e.target === document.getElementById('workspace')) {
+    if (selected) selected.classList.remove('selected');
+    selected = null;
+    pName.value=''; pNotes.value='';
+  }
+});
+
+/* ---------- Helpers ---------- */
+function rgbToHex(rgb){
+  const m = rgb.match(/\d+/g) || [0,0,0];
+  return '#' + m.slice(0,3).map(n=>(+n).toString(16).padStart(2,'0')).join('');
+}
+</script>
+</body>
+</html>

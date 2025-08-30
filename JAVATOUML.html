@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>code </title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>n
+  :root { --bg:#0d1117; --panel:#111827; --ink:#fff; --muted:#9aa4b2; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:ui-sans-serif, system-ui, Segoe UI, Roboto, Arial; }
+  .toolbar { position:sticky; top:0; z-index:2; display:flex; gap:10px; align-items:center; padding:10px; background:#1f6feb; }
+  select, button { background:#0b5bd3; color:#fff; border:0; padding:8px 12px; border-radius:10px; font-weight:600; cursor:pointer; }
+  .wrap { display:grid; grid-template-columns: 520px 1fr; gap:16px; padding:16px; }
+  textarea { width:100%; min-height:420px; background:var(--panel); color:var(--ink); border:1px solid #222a36; border-radius:12px; padding:12px; resize:vertical; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height:1.45; }
+  .stage { background: radial-gradient(1200px 600px at 50% 0%, #0f1623, #0d1117); border:1px solid #222a36; border-radius:16px; overflow:hidden; }
+  canvas { display:block; width:100%; height:100%; }
+  .hint { margin-left:auto; color:var(--ink); opacity:.9; font-weight:600; }
+  .subhint { color:var(--muted); font-size:12px; margin-left:12px; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <label for="type">Diagram:</label>
+  <select id="type">
+    <option value="dfd">DFD (Entities → Processes → Stores)</option>
+    <option value="class">Class Diagram</option>
+    <option value="sequence">Sequence Diagram</option>
+  </select>
+  <button id="btn-generate">Generate</button>
+  <button id="btn-clear">Clear</button>
+  <button id="btn-export">Export PNG</button>
+  <span class="subhint">code → Generate</span>
+</div>
+
+<div class="wrap">
+  <textarea id="src" placeholder="Paste your Java code here..."></textarea>
+  <div class="stage"><canvas id="board" width="1700" height="1100"></canvas></div>
+</div>
+
+<script>
+/* ================= Canvas helpers ================= */
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+
+function clearCanvas(){ ctx.clearRect(0,0,canvas.width,canvas.height); }
+function setStroke(){ ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.shadowColor = "#000"; ctx.shadowBlur = 0; }
+function drawText(text,x,y,maxWidth=220, lh=18, align="center"){
+  ctx.fillStyle = "#fff"; ctx.textAlign=align; ctx.textBaseline="middle"; ctx.font="14px ui-monospace, Menlo, Consolas, monospace";
+  const words = String(text||"").split(/\s+/), lines=[]; let line="";
+  const w = t=>ctx.measureText(t).width;
+  for (let i=0;i<words.length;i++){ const t=line? line+" "+words[i] : words[i]; if (w(t)>maxWidth && line){ lines.push(line); line=words[i]; } else line=t; }
+  lines.push(line);
+  const h = lines.length*lh, baseY = y - h/2 + lh/2;
+  for (let i=0;i<lines.length;i++) ctx.fillText(lines[i], x, baseY + i*lh);
+}
+function roundRect(x,y,w,h,r=12){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); ctx.stroke(); }
+function drawArrow(x1,y1,x2,y2, label){
+  setStroke();
+  const elbow = Math.abs(x2-x1)>80 ? (x1 + (x2>x1? 40 : -40)) : (x1+x2)/2;
+  ctx.beginPath(); ctx.moveTo(x1,y1);
+  if (Math.abs(x2-x1)>80){ ctx.lineTo(elbow,y1); ctx.lineTo(elbow,y2); ctx.lineTo(x2,y2); }
+  else ctx.lineTo(x2,y2);
+  ctx.stroke();
+  // head
+  const ang = Math.atan2(y2 - y1, x2 - elbow);
+  const head = 12;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - head*Math.cos(ang - Math.PI/6), y2 - head*Math.sin(ang - Math.PI/6));
+  ctx.lineTo(x2 - head*Math.cos(ang + Math.PI/6), y2 - head*Math.sin(ang + Math.PI/6));
+  ctx.closePath(); ctx.fillStyle="#fff"; ctx.fill();
+  if (label){ ctx.fillStyle="#9aa4b2"; ctx.font="12px ui-monospace, monospace"; ctx.textAlign="center"; ctx.fillText(label, (x1+x2)/2, (y1+y2)/2 - 8); }
+}
+
+const storeKW = /(Database|Repository|Repo|DAO|Store|Cache|File|Files|Path|Disk|Queue|Topic|Bucket|Index|Table|DB)/;
+
+function parseClasses(java){
+  // returns [{name, fields:[{type,name}], methods:[{name,ret,params}] }]
+  const classes = [];
+  const classRe = /\bclass\s+([A-Z]\w*)\s*(?:extends\s+([A-Z]\w*))?(?:\s+implements\s+([\w<>,\s]+))?\s*\{/g;
+  const fieldRe = /(?:public|private|protected)?\s*(?:static\s+)?([A-Z]\w*(?:<[^>]+>)?(?:\[\])?)\s+([a-zA-Z_]\w*)\s*(?=[=;])/g;
+  const methRe = /(?:public|private|protected)?\s*(?:static\s+)?([\w<>\[\]]+)\s+([a-z]\w*)\s*\(([^)]*)\)\s*\{/g;
+
+  let m;
+  while ((m = classRe.exec(java))){
+    const name = m[1];
+    const start = m.index + m[0].length;
+ 
+    let i = start, depth = 1;
+    while (i < java.length && depth>0){ const ch = java[i++]; if (ch==="{") depth++; else if (ch==="}") depth--; }
+    const body = java.slice(start, i-1);
+    const fields=[], methods=[];
+    let fm; fieldRe.lastIndex=0;
+    while ((fm = fieldRe.exec(body))){ fields.push({type: fm[1], name: fm[2]}); }
+    let mm; methRe.lastIndex=0;
+    while ((mm = methRe.exec(body))){ methods.push({ret:mm[1], name:mm[2], params:mm[3].trim()}); }
+    classes.push({name, fields, methods, extends:m[2]||null, implements:(m[3]||"").split(",").map(s=>s.trim()).filter(Boolean)});
+  }
+  return classes;
+}
+
+function parseForStores(java){
+  const stores = new Set();
+  // Obvious store-like identifiers
+  const capDot = /\b([A-Z]\w*)\s*\./g; let m;
+  while ((m = capDot.exec(java))){ if (storeKW.test(m[1])) stores.add(m[1]); }
+  // Type mentions
+  const typeDecl = /\b([A-Z]\w*)\s+\w+\s*[=;)]/g;
+  while ((m = typeDecl.exec(java))){ if (storeKW.test(m[1])) stores.add(m[1]); }
+  // classes that look like stores
+  const classRe = /\bclass\s+([A-Z]\w*)/g;
+  while ((m = classRe.exec(java))){ if (storeKW.test(m[1])) stores.add(m[1]); }
+  return Array.from(stores);
+}
+
+function parseForCalls(java){
+  // Returns call edges for sequence diagram: [{fromClass, toClass, method}]
+  const calls = [];
+  const classes = parseClasses(java);
+  const whole = java;
+
+  // helper to get class body substring
+  function getBody(clsName){
+    const classRe = new RegExp("\\bclass\\s+"+clsName+"\\b[^{]*\\{","m");
+    const m = classRe.exec(whole); if (!m) return "";
+    let i = m.index + m[0].length, depth=1;
+    while (i<whole.length && depth>0){ const ch = whole[i++]; if (ch==="{") depth++; else if (ch==="}") depth--; }
+    return whole.slice(m.index + m[0].length, i-1);
+  }
+
+  classes.forEach(cls => {
+    const body = getBody(cls.name);
+    // for each method body, detect X.yyy(  ), or new X().yyy(
+    const methRe = /(?:public|private|protected)?\s*(?:static\s+)?[\w<>\[\]]+\s+([a-z]\w*)\s*\([^)]*\)\s*\{/g;
+    let mm, start;
+    while ((mm = methRe.exec(body))){
+      start = methRe.lastIndex;
+      // extract method body braces
+      let i = start, depth=1;
+      while (i<body.length && depth>0){ const ch = body[i++]; if (ch==="{") depth++; else if (ch==="}") depth--; }
+      const mbody = body.slice(start, i-1);
+      // pattern A.B(  or new A().B(
+      const callRe = /\bnew\s+([A-Z]\w*)\s*\(\)\s*\.\s*([a-z]\w*)\s*\(|\b([A-Z]\w*)\s*\.\s*([a-z]\w*)\s*\(/g;
+      let c;
+      while ((c = callRe.exec(mbody))){
+        const to = c[1] || c[3], meth = c[2] || c[4];
+        calls.push({fromClass: cls.name, toClass: to, method: meth});
+      }
+    }
+  });
+  return calls;
+}
+function buildDFD(java){
+  const classes = parseClasses(java);
+  const stores = parseForStores(java);
+
+  const entities = classes.map(c=>c.name).filter(n => !stores.includes(n));
+
+  const processes = [];
+  classes.forEach(c => c.methods.forEach(m => processes.push({ id:`${c.name}.${m.name}`, label:`${c.name}.${m.name}(${m.params})`, cls:c.name })));
+  // Flows: Entity -> its methods; methods -> stores if store name appears in method body
+  const flows = [];
+  const whole = java;
+  processes.forEach(p => {
+    flows.push({ fromType:"entity", fromLabel:p.cls, toType:"process", toLabel:p.id });
+    // crude body slice
+    const re = new RegExp("\\bclass\\s+"+p.cls+"\\b[\\s\\S]*?\\{([\\s\\S]*?)\\b"+p.id.split(".")[1]+"\\s*\\([^)]*\\)\\s*\\{","m");
+    // simpler: search for "Class.method(" then collect braces
+    const idx = whole.indexOf(p.cls+"."+p.id.split(".")[1]+"("); // usually won't exist exactly
+    // fallback: scan class body
+    const classRe = new RegExp("\\bclass\\s+"+p.cls+"\\b[^{]*\\{","m"); const mc = classRe.exec(whole);
+    let body=""; if (mc){
+      let i = mc.index + mc[0].length, depth=1; while (i<whole.length && depth>0){ const ch = whole[i++]; if (ch==="{") depth++; else if (ch==="}") depth--; }
+      const cbody = whole.slice(mc.index + mc[0].length, i-1);
+      const methRe = new RegExp("(?:public|private|protected)?\\s*(?:static\\s+)?[\\w<>\\[\\]]+\\s+"+p.id.split(".")[1]+"\\s*\\([^)]*\\)\\s*\\{","m");
+      const mm = methRe.exec(cbody);
+      if (mm){
+        let j = mm.index + mm[0].length, d=1; while (j<cbody.length && d>0){ const ch=cbody[j++]; if (ch==="{") d++; else if (ch==="}") d--; }
+        body = cbody.slice(mm.index + mm[0].length, j-1);
+      }
+    }
+    stores.forEach(s => { if (body.includes(s+".")) flows.push({ fromType:"process", fromLabel:p.id, toType:"store", toLabel:s }); });
+  });
+
+  return {
+    entities: entities.map(n=>({id:n,label:n})),
+    processes: processes,
+    stores: stores.map(n=>({id:n,label:n})),
+    flows
+  };
+}
+
+/* =================== Class Diagram model =================== */
+function buildClassModel(java){
+  const classes = parseClasses(java);
+  // crude relations: extends / implements + field types referencing other classes
+  const names = new Set(classes.map(c=>c.name));
+  const rels = []; // {from,to,type: "extends"|"implements"|"assoc"}
+  classes.forEach(c=>{
+    if (c.extends) rels.push({from:c.name, to:c.extends, type:"extends"});
+    c.implements.forEach(i => rels.push({from:c.name, to:i, type:"implements"}));
+    c.fields.forEach(f=>{
+      const base = (f.type||"").replace(/<.*?>/g,"").replace(/\[\]/g,"");
+      if (names.has(base)) rels.push({from:c.name, to:base, type:"assoc"});
+    });
+  });
+  return { classes, rels };
+}
+
+/* =================== Sequence Diagram model =================== */
+function buildSequence(java){
+  const calls = parseForCalls(java); // [{fromClass, toClass, method}]
+  // participants are any class seen in classes OR used in calls
+  const classNames = new Set(parseClasses(java).map(c=>c.name));
+  calls.forEach(c=>{ classNames.add(c.fromClass); classNames.add(c.toClass); });
+  const participants = Array.from(classNames);
+  return { participants, calls };
+}
+
+/* =================== Layouts & Renderers =================== */
+/* -------- DFD layout (columns) -------- */
+function layoutDFD(model){
+  const W = canvas.width, H = canvas.height;
+  const colX = { entity: W*0.2, process: W*0.5, store: W*0.8 };
+  const stack = n => Array.from({length: n||1}, (_,i)=> 120 + i * Math.max(90, (H-240)/Math.max(1,n)));
+  const pos = {};
+  (model.entities||[]).forEach((e,i)=> pos[`E:${e.id}`] = {x:colX.entity, y:stack(model.entities.length)[i], type:"entity", box:{w:240,h:62}, label:e.label});
+  (model.processes||[]).forEach((p,i)=> pos[`P:${p.id}`] = {x:colX.process, y:stack(model.processes.length)[i], type:"process", box:{w:260,h:72}, label:p.label});
+  (model.stores||[]).forEach((s,i)=> pos[`S:${s.id}`] = {x:colX.store, y:stack(model.stores.length)[i], type:"store", box:{w:260,h:62}, label:s.label});
+  return pos;
+}
+function drawEntity(x,y,w=500,h=80,label=""){ setStroke(); ctx.strokeRect(x-w/2,y-h/2,w,h); drawText(label,x,y,w-28); }
+function drawProcess(x,y,w=260,h=72,label=""){ setStroke(); roundRect(x-w/2,y-h/2,w,h,18); drawText(label,x,y,w-32); }
+function drawDataStore(x,y,w=260,h=62,label=""){
+  setStroke();
+  const left=x-w/2, right=x+w/2, top=y-h/2, bottom=y+h/2;
+  ctx.beginPath();
+  ctx.moveTo(left, top); ctx.lineTo(right-18, top);
+  ctx.moveTo(left, bottom); ctx.lineTo(right-18, bottom);
+  ctx.moveTo(left, top); ctx.lineTo(left, bottom);
+  ctx.stroke();
+  drawText(label, x-10, y, w-36);
+}
+function renderDFD(model){
+  clearCanvas();
+  const pos = layoutDFD(model);
+  // edges first
+  model.flows.forEach(f=>{
+    const key = t => t==="entity"?"E:":t==="process"?"P:":"S:";
+    const A = pos[key(f.fromType)+f.fromLabel], B = pos[key(f.toType)+f.toLabel];
+    if (!A||!B) return;
+    const ax = A.x + (A.type==="entity" ? A.box.w/2 : 0);
+    const bx = B.x - (B.type==="store" ? B.box.w/2 : 0);
+    drawArrow(ax, A.y, bx, B.y);
+  });
+  // nodes
+  Object.values(pos).forEach(n=>{
+    if (n.type==="entity") drawEntity(n.x,n.y,n.box.w,n.box.h,n.label);
+    else if (n.type==="process") drawProcess(n.x,n.y,n.box.w,n.box.h,n.label);
+    else drawDataStore(n.x,n.y,n.box.w,n.box.h,n.label);
+  });
+  // headers
+  ctx.fillStyle="#9aa4b2"; ctx.font="12px ui-monospace, monospace"; ctx.textAlign="center";
+  ctx.fillText("External Entities", canvas.width*0.2, 40);
+  ctx.fillText("Processes", canvas.width*0.5, 40);
+  ctx.fillText("Data Stores", canvas.width*0.8, 40);
+}
+
+/* -------- Class diagram layout (grid) -------- */
+function renderClassDiagram(model){
+  clearCanvas();
+  const boxes = []; // {cls, x,y,w,h}
+  const cols = Math.max(2, Math.ceil(Math.sqrt(model.classes.length)));
+  const W = canvas.width, H = canvas.height;
+  const gx = cols, gy = Math.ceil(model.classes.length/cols);
+  const cellW = (W - 160) / gx, cellH = Math.max(180, (H - 160) / gy);
+
+  model.classes.forEach((c, idx)=>{
+    const col = idx % cols, row = Math.floor(idx / cols);
+    const x = 100 + col*cellW + cellW/2;
+    const y = 120 + row*cellH + cellH/2;
+    const w = Math.min(300, cellW - 40);
+    // dynamic height based on content
+    const fieldLines = c.fields.length || 1;
+    const methodLines = c.methods.length || 1;
+    const h = 40 + fieldLines*18 + 16 + methodLines*18 + 24;
+    boxes.push({cls:c, x,y,w,h});
+  });
+  function findBox(name){ return boxes.find(b=>b.cls.name===name); }
+  model.rels.forEach(r=>{
+    const a = findBox(r.from), b = findBox(r.to); if (!a||!b) return;
+    // connect centers with arrow style based on relation
+    const label = r.type==="extends" ? "⟵| " : r.type==="implements" ? "⟵∙∙ " : "";
+    drawArrow(a.x, a.y, b.x, b.y, label);
+  });
+
+  // draw nodes
+  boxes.forEach(b=>{
+    setStroke();
+    // outer
+    ctx.strokeRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+    // class title area
+    ctx.fillStyle="transparent";
+    ctx.beginPath(); ctx.moveTo(b.x - b.w/2, b.y - b.h/2 + 32); ctx.lineTo(b.x + b.w/2, b.y - b.h/2 + 32); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(b.x - b.w/2, b.y + b.h/2 - (b.cls.methods.length*18 + 24 + 16)); ctx.lineTo(b.x + b.w/2, b.y + b.h/2 - (b.cls.methods.length*18 + 24 + 16)); ctx.stroke();
+
+    // name
+    ctx.font="bold 14px ui-monospace, Menlo"; ctx.fillStyle="#fff"; ctx.textAlign="center";
+    ctx.fillText(b.cls.name, b.x, b.y - b.h/2 + 16);
+
+    // fields
+    let yy = b.y - b.h/2 + 48; ctx.font="13px ui-monospace, Menlo"; ctx.textAlign="left";
+    const left = b.x - b.w/2 + 10;
+    if (b.cls.fields.length===0){ ctx.fillStyle="#9aa4b2"; ctx.fillText("// fields", left, yy); yy+=18; }
+    else { ctx.fillStyle="#fff"; b.cls.fields.forEach(f=>{ ctx.fillText(`${f.name}: ${f.type}`, left, yy); yy+=18; }); }
+
+    // methods
+    yy += 8;
+    if (b.cls.methods.length===0){ ctx.fillStyle="#9aa4b2"; ctx.fillText("// methods", left, yy); }
+    else { ctx.fillStyle="#fff"; b.cls.methods.forEach(m=>{ ctx.fillText(`${m.name}(${m.params}) : ${m.ret}`, left, yy); yy+=18; }); }
+  });
+
+  // title
+  ctx.fillStyle="#9aa4b2"; ctx.font="12px ui-monospace, monospace"; ctx.textAlign="center";
+  ctx.fillText("Class Diagram (mock parsed)", canvas.width/2, 40);
+}
+
+/* -------- Sequence diagram layout -------- */
+function renderSequence(model){
+  clearCanvas();
+
+  // lifelines
+  const parts = model.participants;
+  const marginX = 120, marginY = 100;
+  const spacing = Math.max(180, (canvas.width - marginX*2) / Math.max(1, parts.length));
+  const lifelines = parts.map((p,i)=>({ name:p, x: marginX + i*spacing, y: marginY }));
+
+  // draw lifelines
+  lifelines.forEach(l=>{
+    // header box
+    setStroke();
+    const w=140, h=34;
+    ctx.strokeRect(l.x - w/2, l.y - h/2, w, h);
+    drawText(l.name, l.x, l.y, w-20);
+    // dashed vertical line
+    ctx.setLineDash([8,8]); ctx.beginPath(); ctx.moveTo(l.x, l.y + h/2); ctx.lineTo(l.x, canvas.height - 80); ctx.stroke(); ctx.setLineDash([]);
+  });
+
+  // messages
+  let y = marginY + 80;
+  const yStep = 60;
+  model.calls.forEach(c=>{
+    const from = lifelines.find(l=>l.name===c.fromClass);
+    const to = lifelines.find(l=>l.name===c.toClass);
+    if (!from || !to) return;
+    const x1 = from.x, x2 = to.x;
+    // solid arrow
+    drawArrow(x1, y, x2, y, `${c.method}()`);
+    y += yStep;
+  });
+
+  // title
+  ctx.fillStyle="#9aa4b2"; ctx.font="12px ui-monospace, monospace"; ctx.textAlign="center";
+  ctx.fillText("Sequence Diagram (mock parsed: class-to-class calls)", canvas.width/2, 40);
+}
+
+/* =================== UI =================== */
+const input = document.getElementById('src');
+const typeSel = document.getElementById('type');
+
+document.getElementById('btn-generate').onclick = () => {
+  const code = input.value || "";
+  const t = typeSel.value;
+
+  if (t === "dfd") {
+    const model = buildDFD(code);
+    renderDFD(model);
+  } else if (t === "class") {
+    const model = buildClassModel(code);
+    renderClassDiagram(model);
+  } else if (t === "sequence") {
+    const model = buildSequence(code);
+    renderSequence(model);
+  }
+};
+
+document.getElementById('btn-clear').onclick = () => { input.value=""; clearCanvas(); };
+document.getElementById('btn-export').onclick = () => {
+  const link = document.createElement('a');
+  link.download = 'diagram.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+};
+
+</script>
+</body>
+</html>

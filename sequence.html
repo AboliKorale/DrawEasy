@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sequence Diagram Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #e6f0fa;
+  --panel: #d2e0f7;
+  --muted: #5d6d7e;
+  --text: #1b1f3b;
+  --radius: 12px;
+  --glass: rgba(255,255,255,.4);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  height: 100vh;
+  font-family: Montserrat, system-ui, Arial, sans-serif;
+  color: var(--text);
+  background: linear-gradient(160deg, #0b0c22, #72a6e2);
+  display: grid;
+  grid-template-columns: 280px 1fr 320px;
+  grid-template-rows: 72px 1fr;
+  gap: 14px;
+  padding: 14px;
+}
+header {
+  grid-column: 1/4;
+  background: var(--panel);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+.title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+}
+.logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #9aa1da;
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+.actions {
+  display: flex;
+  gap: 10px;
+}
+button {
+  border: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(27,31,59,.2);
+  color: var(--text);
+}
+.btn-primary {
+  background: #1b1f3b;
+  color: #fff;
+}
+
+.panel {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 14px;
+  border: 1px solid rgba(27,31,59,.2);
+}
+#toolbox { padding: 14px; }
+.tool-grid { display: grid; gap: 10px; }
+.tool {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.3);
+  cursor: pointer;
+  border: 1px solid rgba(27,31,59,.1);
+  user-select: none;
+}
+.tool svg { width: 44px; height: 44px; flex-shrink: 0; }
+.tool .meta { font-size: 13px; }
+.hint { color: var(--muted); font-size: 12px; margin-top: 12px; }
+
+/* workspace */
+#workspaceWrap { position: relative; }
+#workspace {
+  position: relative;
+  height: 100%;
+  border-radius: 12px;
+  overflow: auto;
+}
+#board {
+  position: absolute;
+  inset: 0;
+  background-color: #c9def8;
+  background-image: radial-gradient(rgba(0,0,0,.05) 1px,transparent 1px);
+  background-size: 22px 22px;
+  padding: 20px;
+}
+
+/* nodes */
+.node {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #1b1f3b;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: move;
+}
+.node.small { padding: 4px 6px; }
+.node .icon { width: 22px; height: 22px; display: grid; place-items: center; }
+.node .label { font-size: 13px; }
+.node.selected {
+  outline: 2px solid #7c4dff;
+  filter: drop-shadow(0 8px 18px rgba(124,77,255,.2));
+}
+
+/* lifeline (header + dashed line) */
+.lifeline { position: absolute; cursor: move; }
+.lifeline .head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 1px solid #1b1f3b;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-weight: 600;
+}
+.lifeline .line {
+  position: absolute;
+  left: 0;
+  top: 42px;
+  border-left: 2px dashed #1b1f3b;
+}
+.lifeline.selected .head { outline: 2px solid #7c4dff; }
+
+/* activation */
+.activation {
+  position: absolute;
+  width: 14px;
+  background: #fff;
+  border: 1px solid #1b1f3b;
+  border-radius: 2px;
+  cursor: move;
+}
+
+/* properties */
+#props {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+label { font-size: 13px; color: var(--muted); }
+input, textarea, select {
+  background: var(--glass);
+  border: 1px solid rgba(27,31,59,.2);
+  padding: 8px;
+  border-radius: 8px;
+  color: var(--text);
+  outline: none;
+}
+textarea { min-height: 60px; resize: vertical; }
+.small-hint { font-size: 12px; color: var(--muted); }
+
+/* scrollbars */
+::-webkit-scrollbar { height: 10px; width: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(27,31,59,.2); border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+
+<header class="panel">
+  <div class="title">
+    <div class="logo">SEQ</div>
+    Sequence Diagram Builder
+  </div>
+  <div class="actions">
+    <button id="btnClear" class="btn-ghost">Clear</button>
+    <button id="btnExport" class="btn-primary">Download PNG</button>
+    <button id="btnDelete" class="btn-ghost" style="margin-top:10px;">Delete Selected</button>
+  </div>
+</header>
+
+<!-- TOOLBOX -->
+<aside id="toolbox" class="panel">
+  <h3 style="margin:0 0 10px 0">Symbols</h3>
+  <div class="tool-grid">
+    <!-- Entity -->
+    <div class="tool" data-shape="Entity">
+      <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="18" fill="none" stroke="#1b1f3b" stroke-width="2"/></svg>
+      <div class="meta">Entity Class</div>
+    </div>
+    <!-- Boundary -->
+    <div class="tool" data-shape="Boundary">
+      <svg viewBox="0 0 64 64"><line x1="18" y1="12" x2="18" y2="52" stroke="#1b1f3b" stroke-width="2"/><line x1="18" y1="30" x2="50" y2="30" stroke="#1b1f3b" stroke-width="2"/></svg>
+      <div class="meta">Boundary Class</div>
+    </div>
+    <!-- Control -->
+    <div class="tool" data-shape="Control">
+      <svg viewBox="0 0 64 64">
+        <circle cx="32" cy="32" r="18" fill="none" stroke="#1b1f3b" stroke-width="2"/>
+        <path d="M24 30a10 10 0 0 1 12-8" fill="none" stroke="#1b1f3b" stroke-width="2"/>
+        <polygon points="38,20 40,28 32,26" fill="#1b1f3b"/>
+      </svg>
+      <div class="meta">Control Class</div>
+    </div>
+    <!-- Activation -->
+    <div class="tool" data-shape="Activation">
+      <svg viewBox="0 0 40 64"><rect x="16" y="8" width="8" height="48" fill="#fff" stroke="#1b1f3b" stroke-width="2"/></svg>
+      <div class="meta">Activation</div>
+    </div>
+    <!-- Lifeline -->
+    <div class="tool" data-shape="Lifeline">
+      <svg viewBox="0 0 64 64"><rect x="18" y="8" width="28" height="16" fill="#fff" stroke="#1b1f3b" stroke-width="2"/><line x1="32" y1="26" x2="32" y2="56" stroke="#1b1f3b" stroke-width="2" stroke-dasharray="5 5"/></svg>
+      <div class="meta">Life Line</div>
+    </div>
+    <!-- Message -->
+    <div class="tool" data-shape="Message">
+      <svg viewBox="0 0 100 30"><line x1="8" y1="15" x2="82" y2="15" stroke="#1b1f3b" stroke-width="2"/><polygon points="82,9 96,15 82,21" fill="#1b1f3b"/></svg>
+      <div class="meta">Message (→)</div>
+    </div>
+    <!-- Return -->
+    <div class="tool" data-shape="Return">
+      <svg viewBox="0 0 100 30"><line x1="8" y1="15" x2="82" y2="15" stroke="#1b1f3b" stroke-width="2" stroke-dasharray="6 4"/><polygon points="82,9 96,15 82,21" fill="#1b1f3b"/></svg>
+      <div class="meta">Return (dashed)</div>
+    </div>
+    <!-- Recursive -->
+    <div class="tool" data-shape="Recursive">
+      <svg viewBox="0 0 100 60"><path d="M10 30 H70 V12 H40" fill="none" stroke="#1b1f3b" stroke-width="2"/><polygon points="40,6 40,18 28,12" fill="#1b1f3b"/></svg>
+      <div class="meta">Recursive</div>
+    </div>
+  </div>
+  <p class="hint">Click a symbol to add it. For Message/Return/Recursive: click the tool, then click source and target (for Recursive, click the same lifeline/object).</p>
+</aside>
+
+<!-- WORKSPACE -->
+<section id="workspaceWrap" class="panel">
+  <div id="workspace"><div id="board"></div></div>
+</section>
+
+<!-- PROPERTIES -->
+<aside id="props" class="panel">
+  <h3 style="margin:0">Properties</h3>
+  <div>
+    <label>Label</label>
+    <input id="pLabel" type="text" placeholder="Message or name">
+  </div>
+  <div>
+    <label>Notes</label>
+    <textarea id="pNotes" placeholder="Optional notes"></textarea>
+  </div>
+  <div>
+    <label>Type</label>
+    <input id="pType" type="text" readonly>
+  </div>
+  <p class="small-hint">Select an item on the board to edit its label.</p>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+const toolbox = document.getElementById('toolbox');
+const board   = document.getElementById('board');
+const pLabel  = document.getElementById('pLabel');
+const pNotes  = document.getElementById('pNotes');
+const pType   = document.getElementById('pType');
+const btnClear= document.getElementById('btnClear');
+const btnExport=document.getElementById('btnExport');
+
+let selected = null;
+let connectors = [];
+let connectorMode = null; // "Message" | "Return" | "Recursive"
+let firstNode = null;
+
+// TOOLBOX
+toolbox.querySelectorAll('.tool').forEach(item=>{
+  const shape = item.dataset.shape;
+  item.addEventListener('click', ()=>{
+    if(['Message','Return','Recursive'].includes(shape)){
+      connectorMode = shape;
+      firstNode = null;
+      alert(shape+' mode: click source then target (same object for Recursive).');
+    } else if(shape === 'Lifeline'){
+      const node = createLifeline(150, 60, 360);
+      board.appendChild(node);
+      selectNode(node);
+    } else if(shape === 'Activation'){
+      const act = createActivation(160, 120, 120);
+      board.appendChild(act);
+      selectNode(act);
+    } else {
+      const node = createObject(shape, 100, 90);
+      board.appendChild(node);
+      selectNode(node);
+    }
+  });
+});
+
+// ---- Node factories ----
+function createObject(type, x=80, y=80){
+  const el = document.createElement('div');
+  el.className = 'node small';
+  el.dataset.type = type;
+  el.style.left = x+'px';
+  el.style.top  = y+'px';
+
+  const icon = document.createElement('div');
+  icon.className = 'icon';
+  icon.innerHTML = iconFor(type);
+
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = defaultLabel(type);
+
+  el.appendChild(icon);
+  el.appendChild(label);
+
+  el._labelEl = label;
+
+  makeDraggable(el);
+  el.addEventListener('mousedown', ()=>selectNode(el));
+  return el;
+}
+
+function createLifeline(x=200, top=60, height=360){
+  const el = document.createElement('div');
+  el.className = 'lifeline';
+  el.dataset.type = 'Lifeline';
+  el.style.left = x+'px';
+  el.style.top  = top+'px';
+  el.style.width = '0px'; // positioned by center
+
+  const head = document.createElement('div');
+  head.className = 'head';
+  head.textContent = 'Object';
+
+  const line = document.createElement('div');
+  line.className = 'line';
+  line.style.height = height+'px';
+
+  el.appendChild(head);
+  el.appendChild(line);
+
+  el._head = head; el._line = line;
+
+  makeDraggable(el,true);
+  el.addEventListener('mousedown', ()=>selectNode(el));
+
+  // simple resize by dragging head with Shift
+  head.addEventListener('mousedown', (e)=>{
+    if(!e.shiftKey) return;
+    e.stopPropagation();
+    let startY = e.clientY;
+    let startH = parseInt(line.style.height,10);
+    function onMove(ev){
+      const delta = ev.clientY - startY;
+      line.style.height = Math.max(60, startH + delta)+'px';
+      updateAllConnectors();
+    }
+    function onUp(){ document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); }
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp,{once:true});
+  });
+
+  return el;
+}
+
+function createActivation(x=0, y=0, h=100){
+  const el = document.createElement('div');
+  el.className = 'activation';
+  el.dataset.type = 'Activation';
+  el.style.left = x+'px';
+  el.style.top  = y+'px';
+  el.style.height = h+'px';
+
+  makeDraggable(el);
+  el.addEventListener('mousedown', ()=>selectNode(el));
+  return el;
+}
+
+// ---- Icons & labels ----
+function iconFor(type){
+  if(type==='Entity') return `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="none" stroke="#1b1f3b" stroke-width="2"/></svg>`;
+  if(type==='Boundary') return `<svg viewBox="0 0 32 32"><line x1="8" y1="4" x2="8" y2="28" stroke="#1b1f3b" stroke-width="2"/><line x1="8" y1="16" x2="28" y2="16" stroke="#1b1f3b" stroke-width="2"/></svg>`;
+  if(type==='Control') return `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="none" stroke="#1b1f3b" stroke-width="2"/><path d="M11 15a7 7 0 0 1 9-6" fill="none" stroke="#1b1f3b" stroke-width="2"/><polygon points="22,8 23,13 18,12" fill="#1b1f3b"/></svg>`;
+  return '';
+}
+function defaultLabel(type){
+  const map={ Entity:'Entity', Boundary:'Boundary', Control:'Control', Activation:'Activation', Lifeline:'Object' };
+  return map[type]||type;
+}
+
+// ---- Selection ----
+function selectNode(el){
+  if(selected) selected.classList.remove('selected');
+  selected = el;
+  if(!selected){ pLabel.value=''; pNotes.value=''; pType.value=''; return; }
+  selected.classList.add('selected');
+
+  pType.value = selected.dataset.type || (selected.classList.contains('lifeline')?'Lifeline':'');
+  if(selected.classList.contains('lifeline')) pLabel.value = selected._head.textContent;
+  else if(selected.classList.contains('node')) pLabel.value = selected._labelEl.textContent;
+  else pLabel.value = selected.dataset.label || '';
+
+  pNotes.value = selected.dataset.notes || '';
+}
+
+// live updates
+pLabel.addEventListener('input', ()=>{
+  if(!selected) return;
+  if(selected.classList.contains('lifeline')) selected._head.textContent = pLabel.value;
+  else if(selected.classList.contains('node')) selected._labelEl.textContent = pLabel.value;
+  else {
+    selected.dataset.label = pLabel.value;
+    if(selected._textEl) selected._textEl.textContent = pLabel.value;
+  }
+});
+pNotes.addEventListener('input', ()=>{ if(selected) selected.dataset.notes = pNotes.value; });
+
+// ---- Dragging ----
+function makeDraggable(el, centerX=false){
+  let startX=0,startY=0,offX=0,offY=0,moving=false;
+  el.addEventListener('mousedown', (e)=>{
+    moving = true;
+    const r = el.getBoundingClientRect();
+    const b = board.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY;
+    offX = startX - r.left; offY = startY - r.top;
+    function onMove(ev){
+      if(!moving) return;
+      let x = ev.clientX - b.left - offX;
+      let y = ev.clientY - b.top - offY;
+      if(centerX){ // lifeline centers on x
+        el.style.left = (x + el.offsetWidth/2)+'px';
+      }else{
+        el.style.left = x+'px';
+      }
+      el.style.top  = y+'px';
+      updateAllConnectors();
+    }
+    function onUp(){ moving=false; document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); }
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp,{once:true});
+    selectNode(el);
+  });
+}
+
+// ---- Geometry helpers ----
+function centerOf(el){
+  const r = el.getBoundingClientRect();
+  const b = board.getBoundingClientRect();
+  return { x: r.left - b.left + r.width/2, y: r.top - b.top + r.height/2 };
+}
+function topCenterOf(el){
+  const r = el.getBoundingClientRect();
+  const b = board.getBoundingClientRect();
+  return { x: r.left - b.left + r.width/2, y: r.top - b.top };
+}
+function rightOf(el){
+  const r = el.getBoundingClientRect();
+  const b = board.getBoundingClientRect();
+  return { x: r.left - b.left + r.width, y: r.top - b.top + r.height/2 };
+}
+function leftOf(el){
+  const r = el.getBoundingClientRect();
+  const b = board.getBoundingClientRect();
+  return { x: r.left - b.left, y: r.top - b.top + r.height/2 };
+}
+
+// ---- Connectors ----
+const NS = "http://www.w3.org/2000/svg";
+function createSvgOverlay(){
+  let svg = board.querySelector('svg.__overlay');
+  if(!svg){
+    svg = document.createElementNS(NS,"svg");
+    svg.classList.add('__overlay');
+    svg.setAttribute('style','position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;');
+    // markers
+    const defs=document.createElementNS(NS,'defs');
+    defs.innerHTML = `
+      <marker id="arrowSolid" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto">
+        <polygon points="0,0 10,5 0,10" fill="#1b1f3b"/>
+      </marker>
+      <marker id="arrowHollow" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto">
+        <polygon points="0,0 10,5 0,10" fill="none" stroke="#1b1f3b" stroke-width="2"/>
+      </marker>
+    `;
+    svg.appendChild(defs);
+    board.appendChild(svg);
+  }
+  return svg;
+}
+function addMessageConnector(n1,n2,type,label=''){
+  const svg = createSvgOverlay();
+  const g  = document.createElementNS(NS,'g');
+  const line = document.createElementNS(NS,'line');
+  line.setAttribute('stroke','#1b1f3b');
+  line.setAttribute('stroke-width','2');
+  if(type==='Return') line.setAttribute('stroke-dasharray','6 4');
+  line.setAttribute('marker-end','url(#arrowSolid)');
+
+  const text = document.createElementNS(NS,'text');
+  text.setAttribute('font-size','12');
+  text.setAttribute('font-family','Montserrat, Arial, sans-serif');
+  text.setAttribute('fill','#1b1f3b');
+  text.textContent = label;
+
+  g.appendChild(line); g.appendChild(text);
+  svg.appendChild(g);
+
+  const conn = {kind:'message', type, n1, n2, el:g, line, text};
+  connectors.push(conn);
+  updateConnector(conn);
+  return conn;
+}
+function addRecursiveConnector(n, yOffset=0, label=''){
+  const svg = createSvgOverlay();
+  const g = document.createElementNS(NS,'g');
+  const path = document.createElementNS(NS,'path');
+  path.setAttribute('fill','none'); path.setAttribute('stroke','#1b1f3b'); path.setAttribute('stroke-width','2');
+  const arrow = document.createElementNS(NS,'polygon'); // little arrow at end
+  arrow.setAttribute('fill','#1b1f3b');
+  const text = document.createElementNS(NS,'text');
+  text.setAttribute('font-size','12');
+  text.setAttribute('font-family','Montserrat, Arial, sans-serif');
+  text.setAttribute('fill','#1b1f3b');
+  text.textContent = label;
+
+  g.appendChild(path); g.appendChild(arrow); g.appendChild(text);
+  svg.appendChild(g);
+
+  const conn = {kind:'recursive', n, yOffset, el:g, path, arrow, text};
+  connectors.push(conn);
+  updateConnector(conn);
+  return conn;
+}
+
+function updateConnector(conn){
+  if(conn.kind==='message'){
+    const a = rightOf(conn.n1), b = leftOf(conn.n2);
+    const y = (a.y + b.y)/2; // keep horizontal-ish mid
+    conn.line.setAttribute('x1', a.x);
+    conn.line.setAttribute('y1', y);
+    conn.line.setAttribute('x2', b.x);
+    conn.line.setAttribute('y2', y);
+    if(conn.type==='Return') conn.line.setAttribute('stroke-dasharray','6 4');
+    // text in middle
+    const midx = (a.x+b.x)/2, midy = y - 6;
+    conn.text.setAttribute('x', midx);
+    conn.text.setAttribute('y', midy);
+  } else if(conn.kind==='recursive'){
+    const c = centerOf(conn.n);
+    const x1 = c.x + 20, y1 = c.y + conn.yOffset;
+    const w = 70, h = 18;
+    const d = `M ${x1} ${y1} H ${x1+w} V ${y1-h} H ${x1+24}`;
+    conn.path.setAttribute('d', d);
+    conn.arrow.setAttribute('points', `${x1+24-12},${y1-h-6} ${x1+24-12},${y1-h+6} ${x1+24},${y1-h}`);
+    conn.text.setAttribute('x', x1 + 8);
+    conn.text.setAttribute('y', y1 - h - 6);
+  }
+}
+function updateAllConnectors(){ connectors.forEach(updateConnector); }
+
+// Click-to-connect
+board.addEventListener('mousedown', (e)=>{
+  if(!connectorMode) return;
+  const node = e.target.closest('.node,.lifeline,.activation');
+  if(!node) return;
+
+  if(connectorMode==='Recursive'){
+    addRecursiveConnector(node, 0, 'recursive');
+    connectorMode=null; firstNode=null; return;
+  }
+
+  if(!firstNode){ firstNode=node; return; }
+  if(node===firstNode && connectorMode!=='Recursive'){ firstNode=null; return; }
+
+  const conn = addMessageConnector(firstNode, node, connectorMode, connectorMode==='Return'?'return':'' );
+  firstNode = null; connectorMode = null;
+});
+
+// CLEAR
+btnClear.addEventListener('click', ()=>{
+  board.innerHTML=''; connectors=[]; selected=null;
+  pLabel.value=''; pNotes.value=''; pType.value='';
+});
+
+// EXPORT
+btnExport.addEventListener('click', ()=>{
+  html2canvas(board,{backgroundColor:null,scale:2}).then(canvas=>{
+    const link=document.createElement('a');
+    link.download='sequence-diagram.png';
+    link.href=canvas.toDataURL('image/png');
+    link.click();
+  });
+});
+
+// Deselect if clicking empty board
+board.addEventListener('mousedown', e=>{
+  if(e.target===board){
+    if(selected) selected.classList.remove('selected');
+    selected=null; pLabel.value=''; pNotes.value=''; pType.value='';
+  }
+});
+
+// ---- Demo placement ----
+(function demo(){
+  const lifA = createLifeline(180, 60, 420); board.appendChild(lifA); lifA._head.textContent='User';
+  const lifB = createLifeline(420, 60, 420); board.appendChild(lifB); lifB._head.textContent='System';
+
+  const act1 = createActivation(172, 140, 120); board.appendChild(act1);
+  const ent  = createObject('Entity', 80, 90); board.appendChild(ent);
+  const bnd  = createObject('Boundary', 300, 90); board.appendChild(bnd);
+  const ctrl = createObject('Control', 560, 90); board.appendChild(ctrl);
+
+  addMessageConnector(ent, bnd, 'Message', 'request()');
+  addMessageConnector(bnd, ctrl, 'Message', 'process()');
+  addMessageConnector(ctrl, bnd, 'Return', 'result');
+  addRecursiveConnector(ctrl, 40, 'retry');
+})();
+const btnDelete = document.getElementById('btnDelete');
+
+btnDelete.addEventListener('click', () => {
+  if (!selected) return;
+
+  // Remove any connectors related to this node
+  connectors = connectors.filter(conn => {
+    if (conn.n1 === selected || conn.n2 === selected || conn.n === selected) {
+      conn.el?.remove(); // SVG group for message/return
+      return false;
+    }
+    return true;
+  });
+
+  selected.remove();
+  selected = null;
+  pLabel.value = '';
+  pNotes.value = '';
+  pType.value = '';
+});
+
+</script>
+</body>
+</html>

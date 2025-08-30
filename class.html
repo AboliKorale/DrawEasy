@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Diagram Builder</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #e6f0fa;
+            --panel: #d2e0f7;
+            --muted: #5d6d7e;
+            --text: #1b1f3b;
+            --radius: 12px;
+            --glass: rgba(255,255,255,.4);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            height: 100vh;
+            font-family: Montserrat, system-ui, Arial, sans-serif;
+            color: var(--text);
+            background: var(--bg);
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            grid-template-rows: 72px 1fr;
+            gap: 14px;
+            padding: 14px;
+        }
+        header {
+            grid-column: 1/4;
+            background: var(--panel);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+        }
+        .title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+        }
+        .logo {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: linear-gradient(135deg,#7c4dff,#00e5ff);
+            display: grid;
+            place-items: center;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            border: 0;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid rgba(27,31,59,.2);
+            color: var(--text);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg,#7c4dff,#00e5ff);
+            color: #fff;
+        }
+        .panel {
+            background: var(--panel);
+            backdrop-filter: blur(4px);
+            border-radius: var(--radius);
+            padding: 14px;
+            border: 1px solid rgba(27,31,59,.2);
+        }
+        #toolbox { padding: 14px; }
+        .tool-grid { display: grid; gap: 10px; }
+        .tool {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(255,255,255,.3);
+            cursor: pointer;
+            border: 1px solid rgba(27,31,59,.1);
+        }
+        .tool svg { width: 44px; height: 44px; flex-shrink: 0; }
+        .tool .meta { font-size: 13px; }
+        .hint { color: var(--muted); font-size: 12px; margin-top: 12px; }
+        #workspaceWrap { position: relative; }
+        #workspace { position: relative; height: 100%; border-radius: 12px; overflow: auto; }
+        #board {
+            position: absolute;
+            inset: 0;
+            background-color: #c9def8;
+            background-image: radial-gradient(rgba(0,0,0,.05) 1px,transparent 1px);
+            background-size: 22px 22px;
+            padding: 20px;
+        }
+        .node {
+            position: absolute;
+            background: #f0f5ff;
+            border: 1px solid #7c8da3;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            cursor: move;
+        }
+        .node .header {
+            padding: 6px 10px;
+            background: #d2e0f7;
+            font-weight: 600;
+            border-bottom: 1px solid #7c8da3;
+        }
+        .node .section {
+            padding: 6px 10px;
+            border-top: 1px solid #7c8da3;
+            font-size: 13px;
+            white-space: pre;
+        }
+        .node.selected {
+            outline: 2px solid #7c4dff;
+            filter: drop-shadow(0 8px 18px rgba(124,77,255,.2));
+        }
+        #props {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        label { font-size: 13px; color: var(--muted); }
+        input, textarea {
+            background: var(--glass);
+            border: 1px solid rgba(27,31,59,.2);
+            padding: 8px;
+            border-radius: 8px;
+            color: var(--text);
+            outline: none;
+        }
+        textarea { min-height: 60px; resize: vertical; }
+        .small-hint { font-size: 12px; color: var(--muted); }
+        ::-webkit-scrollbar { height: 10px; width: 10px; }
+        ::-webkit-scrollbar-thumb { background: rgba(27,31,59,.2); border-radius: 999px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body>
+
+    <header class="panel">
+        <div class="title">
+            <div class="logo">CSD</div>
+            Class Diagram Builder
+        </div>
+        <div class="actions">
+            <button id="btnClear" class="btn-ghost">Clear</button>
+            <button id="btnExport" class="btn-primary">Download PNG</button>
+            <button id="btnDelete" class="btn-ghost" style="margin-top:10px;">Delete Selected</button>
+        </div>
+    </header>
+
+    <aside id="toolbox" class="panel">
+        <h3 style="margin:0 0 10px 0">Tools</h3>
+        <div class="tool-grid">
+            <div class="tool" data-shape="Class">Class</div>
+            <div class="tool" data-shape="Interface">Interface</div>
+            <div class="tool" data-shape="Association">➡ Association</div>
+            <div class="tool" data-shape="Aggregation">◇ Aggregation</div>
+            <div class="tool" data-shape="Composition">◆ Composition</div>
+            <div class="tool" data-shape="Generalization">△ Generalization</div>
+        </div>
+        <p class="hint">
+            Click a class/interface to add it. Click connector type, then select first and second class to connect.
+        </p>
+    </aside>
+
+    <section id="workspaceWrap" class="panel">
+        <div id="workspace">
+            <div id="board"></div>
+        </div>
+    </section>
+
+    <aside id="props" class="panel">
+        <h3 style="margin:0">Properties</h3>
+        <div>
+            <label>Class/Interface Name</label>
+            <input id="pName" type="text" placeholder="Class Name">
+        </div>
+        <div>
+            <label>Attributes (one per line)</label>
+            <textarea id="pAttrs" placeholder="attributeName: Type"></textarea>
+        </div>
+        <div>
+            <label>Methods (one per line)</label>
+            <textarea id="pMethods" placeholder="methodName(params): Type"></textarea>
+        </div>
+        <p class="small-hint">Select a class to edit its properties.</p>
+        <div>
+            <label>Background Color</label>
+            <input id="pColor" type="color" value="#f0f5ff">
+        </div>
+    </aside>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script>
+        const toolbox = document.getElementById('toolbox');
+        const board = document.getElementById('board');
+        const pName = document.getElementById('pName');
+        const pAttrs = document.getElementById('pAttrs');
+        const pMethods = document.getElementById('pMethods');
+        const btnClear = document.getElementById('btnClear');
+        const btnExport = document.getElementById('btnExport');
+        const pColor = document.getElementById('pColor');
+        const btnDelete = document.getElementById('btnDelete');
+
+        let selected = null;
+        let connectorMode = null;
+        let firstNode = null;
+        let connectors = [];
+
+        toolbox.querySelectorAll('.tool').forEach(item => {
+            const shape = item.dataset.shape;
+            if (shape === 'Class' || shape === 'Interface') {
+                item.addEventListener('click', () => {
+                    const node = createNode(shape, 100, 100);
+                    board.appendChild(node);
+                    selectNode(node);
+                });
+            } else {
+                item.addEventListener('click', () => {
+                    connectorMode = shape;
+                    firstNode = null;
+                    alert('Connector mode: ' + connectorMode + '. Click first and second class.');
+                });
+            }
+        });
+
+        function createNode(type, x = 80, y = 80) {
+            const el = document.createElement('div');
+            el.className = 'node';
+            el.dataset.type = type;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+
+            const header = document.createElement('div');
+            header.className = 'header';
+            header.textContent = type === 'Class' ? 'ClassName' : 'InterfaceName';
+
+            const attr = document.createElement('div');
+            attr.className = 'section';
+            attr.textContent = '';
+
+            const methods = document.createElement('div');
+            methods.className = 'section';
+            methods.textContent = '';
+
+            el.appendChild(header);
+            el.appendChild(attr);
+            el.appendChild(methods);
+
+            el._header = header;
+            el._attr = attr;
+            el._methods = methods;
+
+            makeDraggable(el);
+            el.addEventListener('mousedown', () => selectNode(el));
+
+            return el;
+        }
+
+        function selectNode(el) {
+            if (selected) selected.classList.remove('selected');
+            selected = el;
+            if (!selected) return;
+            selected.classList.add('selected');
+
+            pName.value = selected._header.textContent;
+            pAttrs.value = selected._attr.textContent;
+            pMethods.value = selected._methods.textContent;
+            pColor.value = rgbToHex(window.getComputedStyle(selected).backgroundColor);
+        }
+
+        pName.addEventListener('input', () => {
+            if (selected) selected._header.textContent = pName.value;
+        });
+        pAttrs.addEventListener('input', () => {
+            if (selected) selected._attr.textContent = pAttrs.value;
+        });
+        pMethods.addEventListener('input', () => {
+            if (selected) selected._methods.textContent = pMethods.value;
+        });
+
+        function makeDraggable(el) {
+            let startX = 0, startY = 0, offX = 0, offY = 0, moving = false;
+            el.addEventListener('mousedown', e => {
+                moving = true;
+                const r = el.getBoundingClientRect();
+                startX = e.clientX; startY = e.clientY;
+                offX = startX - r.left; offY = startY - r.top;
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp, { once: true });
+                selectNode(el);
+            });
+            function onMove(e) {
+                if (!moving) return;
+                const bRect = board.getBoundingClientRect();
+                let x = e.clientX - bRect.left - offX;
+                let y = e.clientY - bRect.top - offY;
+                x = Math.max(8, Math.min(x, bRect.width - el.offsetWidth - 8));
+                y = Math.max(8, Math.min(y, bRect.height - el.offsetHeight - 8));
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
+
+                connectors.forEach(conn => {
+                    if (conn.n1 === el || conn.n2 === el) updateConnector(conn);
+                });
+            }
+            function onUp() {
+                moving = false;
+                document.removeEventListener('mousemove', onMove);
+            }
+        }
+
+        board.addEventListener('mousedown', e => {
+            if (!connectorMode) return;
+            const nodeEl = e.target.closest('.node');
+            if (!nodeEl) return;
+
+            if (!firstNode) {
+                firstNode = nodeEl;
+                return;
+            }
+
+            drawConnector(firstNode, nodeEl, connectorMode);
+            firstNode = null;
+            connectorMode = null;
+        });
+
+        function getIntersection(rect, x2, y2) {
+            const x1 = rect.left + rect.width / 2, y1 = rect.top + rect.height / 2;
+            const dx = x2 - x1, dy = y2 - y1;
+            const w = rect.width / 2, h = rect.height / 2;
+            let scale = 0.5 / Math.max(Math.abs(dx) / (2 * w), Math.abs(dy) / (2 * h));
+            scale = Math.min(1, scale);
+            return { x: x1 + dx * scale, y: y1 + dy * scale };
+        }
+
+        function drawConnector(n1, n2, type) {
+            const ns = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(ns, "svg");
+            svg.setAttribute("style", "position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;");
+
+            const line = document.createElementNS(ns, "line");
+            line.setAttribute("stroke", "#1b1f3b");
+            line.setAttribute("stroke-width", "2");
+
+            const defs = document.createElementNS(ns, "defs");
+            defs.innerHTML = `
+                <marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L6,3 z" fill="#1b1f3b"/>
+                </marker>
+                <marker id="agg" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto">
+                    <path d="M0,6 L6,0 L12,6 L6,12 Z" fill="none" stroke="#1b1f3b" stroke-width="2"/>
+                </marker>
+                <marker id="comp" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto">
+                    <path d="M0,6 L6,0 L12,6 L6,12 Z" fill="#1b1f3b" stroke="#1b1f3b" stroke-width="2"/>
+                </marker>
+                <marker id="gen" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto">
+                    <path d="M0,0 L12,6 L0,12 Z" fill="none" stroke="#1b1f3b" stroke-width="2"/>
+                </marker>
+            `;
+            svg.appendChild(defs);
+            svg.appendChild(line);
+            board.appendChild(svg);
+
+            const connData = { n1, n2, line, type };
+            connectors.push(connData);
+            updateConnector(connData);
+        }
+
+        function updateConnector(conn) {
+            const r1 = conn.n1.getBoundingClientRect();
+            const r2 = conn.n2.getBoundingClientRect();
+            const br = board.getBoundingClientRect();
+
+            const c1 = getIntersection(r1, r2.left + r2.width / 2, r2.top + r2.height / 2);
+            const c2 = getIntersection(r2, r1.left + r1.width / 2, r1.top + r1.height / 2);
+
+            conn.line.setAttribute("x1", c1.x - br.left);
+            conn.line.setAttribute("y1", c1.y - br.top);
+            conn.line.setAttribute("x2", c2.x - br.left);
+            conn.line.setAttribute("y2", c2.y - br.top);
+
+            if (conn.type === "Association") conn.line.setAttribute("marker-end", "url(#arrow)");
+            if (conn.type === "Aggregation") conn.line.setAttribute("marker-end", "url(#agg)");
+            if (conn.type === "Composition") conn.line.setAttribute("marker-end", "url(#comp)");
+            if (conn.type === "Generalization") conn.line.setAttribute("marker-end", "url(#gen)");
+        }
+
+        btnClear.addEventListener('click', () => {
+            board.innerHTML = '';
+            selected = null;
+            connectors = [];
+            pName.value = '';
+            pAttrs.value = '';
+            pMethods.value = '';
+        });
+
+        btnExport.addEventListener('click', () => {
+            html2canvas(board, { backgroundColor: null, scale: 2 }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'class-diagram.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        });
+
+        board.addEventListener('mousedown', e => {
+            if (e.target === board || e.target === document.getElementById('workspace')) {
+                if (selected) selected.classList.remove('selected');
+                selected = null;
+                pName.value = '';
+                pAttrs.value = '';
+                pMethods.value = '';
+            }
+        });
+
+        pColor.addEventListener('input', () => {
+            if (selected) selected.style.backgroundColor = pColor.value;
+        });
+
+        function rgbToHex(rgb) {
+            const nums = rgb.match(/\d+/g).map(Number);
+            return "#" + nums.map(n => n.toString(16).padStart(2, '0')).join('');
+        }
+
+        btnDelete.addEventListener('click', () => {
+            if (!selected) return;
+
+            // Remove any connectors related to this node
+            connectors = connectors.filter(conn => {
+                if (conn.n1 === selected || conn.n2 === selected || conn.n === selected) {
+                    conn.el?.remove(); // SVG group for message/return
+                    return false;
+                }
+                return true;
+            });
+
+            selected.remove();
+            selected = null;
+            pName.value = '';
+            pAttrs.value = '';
+            pMethods.value = '';
+        });
+    </script>
+</body>
+</html>

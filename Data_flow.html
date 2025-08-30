@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DFD Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+    --bg:#e6f0fa; --panel:#d2e0f7; --muted:#5d6d7e; --text:#1b1f3b;
+    --radius:12px; --glass:rgba(255,255,255,.4);
+}
+*{box-sizing:border-box;}
+body{
+    margin:0; height:100vh; font-family:Montserrat,system-ui,Arial,sans-serif; color:var(--text);
+    background:var(--bg); display:grid; grid-template-columns:280px 1fr 320px; grid-template-rows:72px 1fr; gap:14px; padding:14px;
+}
+header{grid-column:1/4;background:var(--panel);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;padding:14px 18px;}
+.title{display:flex;align-items:center;gap:12px;font-weight:700;}
+.logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#7c4dff,#00e5ff);display:grid;place-items:center;}
+.actions{display:flex;gap:10px;}
+button{border:0;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;}
+.btn-ghost{background:transparent;border:1px solid rgba(27,31,59,.2);color:var(--text);}
+.btn-primary{background:linear-gradient(135deg,#7c4dff,#00e5ff);color:#fff;}
+.panel{background:var(--panel);backdrop-filter:blur(4px);border-radius:var(--radius);padding:14px;border:1px solid rgba(27,31,59,.2);}
+#toolbox{padding:14px;}
+.tool-grid{display:grid;gap:10px;}
+.tool{display:flex;gap:10px;align-items:center;padding:10px;border-radius:10px;background:rgba(255,255,255,.3);cursor:pointer;border:1px solid rgba(27,31,59,.1);}
+.hint{color:var(--muted);font-size:12px;margin-top:12px;}
+#workspaceWrap{position:relative;}
+#workspace{position:relative;height:100%;border-radius:12px;overflow:auto;}
+#board{position:absolute;inset:0;background-color:#c9def8;background-image:radial-gradient(rgba(0,0,0,.05) 1px,transparent 1px);background-size:22px 22px;padding:20px;}
+.node{position:absolute;background:#f0f5ff;border:1px solid #7c8da3;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:10px;cursor:move;min-width:100px;min-height:50px;text-align:center;}
+.node.selected{outline:2px solid #7c4dff;filter:drop-shadow(0 8px 18px rgba(124,77,255,.2));}
+.node[data-type="Process"]{border-radius:50%;}
+.node[data-type="DataStore"]{border-radius:0;border-left:6px double #1b1f3b;}
+.node[data-type="Entity"]{border-radius:4px;}
+#props{padding:14px;display:flex;flex-direction:column;gap:10px;}
+label{font-size:13px;color:var(--muted);}
+input,textarea{background:var(--glass);border:1px solid rgba(27,31,59,.2);padding:8px;border-radius:8px;color:var(--text);outline:none;}
+::-webkit-scrollbar{height:10px;width:10px;}
+::-webkit-scrollbar-thumb{background:rgba(27,31,59,.2);border-radius:999px;}
+::-webkit-scrollbar-track{background:transparent;}
+</style>
+</head>
+<body>
+
+<header class="panel">
+    <div class="title"><div class="logo">DFD</div>DFD Builder</div>
+    <div class="actions">
+        <button id="btnClear" class="btn-ghost">Clear</button>
+        <button id="btnExport" class="btn-primary">Download PNG</button>
+        <button id="btnDelete" class="btn-ghost" style="margin-top:10px;">Delete Selected</button>
+    </div>
+</header>
+
+<aside id="toolbox" class="panel">
+    <h3 style="margin:0 0 10px 0">Tools</h3>
+    <div class="tool-grid">
+        <div class="tool" data-shape="Process">⭕ Process</div>
+        <div class="tool" data-shape="Entity">▭ External Entity</div>
+        <div class="tool" data-shape="DataStore">≡ Data Store</div>
+        <div class="tool" data-shape="DataFlow">➡ Data Flow</div>
+    </div>
+    <p class="hint">Click a shape to add it. For Data Flow, select first and second element to connect.</p>
+</aside>
+
+<section id="workspaceWrap" class="panel">
+    <div id="workspace"><div id="board"></div></div>
+</section>
+
+<aside id="props" class="panel">
+    <h3 style="margin:0">Properties</h3>
+    <div>
+        <label>Name/Label</label>
+        <input id="pLabel" type="text" placeholder="Element Name">
+    </div>
+    <div>
+        <label>Background Color</label>
+        <input id="pColor" type="color" value="#f0f5ff">
+    </div>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+const toolbox=document.getElementById('toolbox');
+const board=document.getElementById('board');
+const pLabel=document.getElementById('pLabel');
+const pColor=document.getElementById('pColor');
+let selected=null, connectorMode=null, firstNode=null;
+let connectors=[];
+
+toolbox.querySelectorAll('.tool').forEach(item=>{
+    const shape=item.dataset.shape;
+    if(shape!=='DataFlow'){
+        item.addEventListener('click',()=>{
+            const node=createNode(shape,100,100);
+            board.appendChild(node);
+            selectNode(node);
+        });
+    }else{
+        item.addEventListener('click',()=>{
+            connectorMode=shape;
+            firstNode=null;
+            alert('Connector mode: Data Flow. Click first and second element.');
+        });
+    }
+});
+
+function createNode(type,x=80,y=80){
+    const el=document.createElement('div');
+    el.className='node';
+    el.dataset.type=type;
+    el.style.left=x+'px';
+    el.style.top=y+'px';
+    el.textContent=type;
+    makeDraggable(el);
+    el.addEventListener('mousedown',()=>selectNode(el));
+    return el;
+}
+
+function selectNode(el){
+    if(selected) selected.classList.remove('selected');
+    selected=el;
+    if(!selected) return;
+    selected.classList.add('selected');
+    pLabel.value=selected.textContent;
+    pColor.value=rgbToHex(window.getComputedStyle(selected).backgroundColor);
+}
+
+pLabel.addEventListener('input',()=>{ if(selected) selected.textContent=pLabel.value; });
+pColor.addEventListener('input',()=>{ if(selected) selected.style.backgroundColor=pColor.value; });
+
+function makeDraggable(el){
+    let offX=0,offY=0,moving=false;
+    el.addEventListener('mousedown',e=>{
+        moving=true;
+        const r=el.getBoundingClientRect();
+        offX=e.clientX-r.left; offY=e.clientY-r.top;
+        document.addEventListener('mousemove',onMove);
+        document.addEventListener('mouseup',onUp,{once:true});
+        selectNode(el);
+    });
+    function onMove(e){
+        if(!moving) return;
+        const b=board.getBoundingClientRect();
+        let x=e.clientX-b.left-offX;
+        let y=e.clientY-b.top-offY;
+        el.style.left=x+'px'; el.style.top=y+'px';
+        connectors.forEach(c=>{if(c.n1===el||c.n2===el)updateConnector(c);});
+    }
+    function onUp(){moving=false;document.removeEventListener('mousemove',onMove);}
+}
+
+board.addEventListener('mousedown',e=>{
+    if(!connectorMode) return;
+    const nodeEl=e.target.closest('.node');
+    if(!nodeEl) return;
+    if(!firstNode){firstNode=nodeEl;return;}
+    drawConnector(firstNode,nodeEl);
+    firstNode=null; connectorMode=null;
+});
+
+function getIntersection(rect,x2,y2){
+    const x1=rect.left+rect.width/2, y1=rect.top+rect.height/2;
+    const dx=x2-x1, dy=y2-y1;
+    const w=rect.width/2, h=rect.height/2;
+    let scale=0.5/Math.max(Math.abs(dx)/(2*w), Math.abs(dy)/(2*h));
+    scale=Math.min(1, scale);
+    return {x:x1+dx*scale,y:y1+dy*scale};
+}
+
+function drawConnector(n1,n2){
+    const ns="http://www.w3.org/2000/svg";
+    const svg=document.createElementNS(ns,"svg");
+    svg.setAttribute("style","position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;");
+    const line=document.createElementNS(ns,"line");
+    line.setAttribute("stroke","#1b1f3b");
+    line.setAttribute("stroke-width","2");
+    line.setAttribute("marker-end","url(#arrow)");
+    const defs=document.createElementNS(ns,"defs");
+    defs.innerHTML=`<marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#1b1f3b"/></marker>`;
+    svg.appendChild(defs); svg.appendChild(line); board.appendChild(svg);
+    const conn={n1,n2,line}; connectors.push(conn); updateConnector(conn);
+}
+
+function updateConnector(conn){
+    const r1=conn.n1.getBoundingClientRect();
+    const r2=conn.n2.getBoundingClientRect();
+    const br=board.getBoundingClientRect();
+    const c1=getIntersection(r1,r2.left+r2.width/2,r2.top+r2.height/2);
+    const c2=getIntersection(r2,r1.left+r1.width/2,r1.top+r1.height/2);
+    conn.line.setAttribute("x1",c1.x-br.left);
+    conn.line.setAttribute("y1",c1.y-br.top);
+    conn.line.setAttribute("x2",c2.x-br.left);
+    conn.line.setAttribute("y2",c2.y-br.top);
+}
+
+document.getElementById('btnClear').addEventListener('click',()=>{
+    board.innerHTML=''; selected=null; connectors=[];
+    pLabel.value='';
+});
+
+document.getElementById('btnExport').addEventListener('click',()=>{
+    html2canvas(board,{backgroundColor:null,scale:2}).then(canvas=>{
+        const link=document.createElement('a');
+        link.download='dfd.png';
+        link.href=canvas.toDataURL('image/png');
+        link.click();
+    });
+});
+
+document.getElementById('btnDelete').addEventListener('click',()=>{
+    if(!selected) return;
+    connectors=connectors.filter(c=>{
+        if(c.n1===selected||c.n2===selected){c.line.ownerSVGElement.remove();return false;}
+        return true;
+    });
+    selected.remove(); selected=null; pLabel.value='';
+});
+
+function rgbToHex(rgb){
+    const nums=rgb.match(/\d+/g).map(Number);
+    return "#"+nums.map(n=>n.toString(16).padStart(2,'0')).join('');
+}
+</script>
+</body>
+</html>
